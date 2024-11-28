@@ -6,16 +6,60 @@ How to guides
 
 
 ######################################################################
-# Introduction
-# ------------
+# Preparing inputs for `PythonJob`
+# --------------------------------
+# The `prepare_pythonjob_inputs` function is available for setting up the
+# inputs for a `PythonJob` calculation. This function simplifies the process
+# of preparing and serializing data, and configuring the execution environment.
 #
-# To run this tutorial, you need to load the AiiDA profile.
+# - **Code**: You can specify the `computer` where the job will run, which will
+#   create a `python3@computer` code if it doesn't already exist. Alternatively,
+#   if the code has already been created, you can set the `code` directly.
 #
-
-from aiida import load_profile
-
-load_profile()
-
+# - **Data**: Use standard Python data types for input. The `prepare_pythonjob_inputs`
+#   function handles the conversion to AiiDA data. For serialization:
+#    - The function first searches for an AiiDA data entry point corresponding to the module
+#      and class names (e.g., `ase.atoms.Atoms`).
+#    - If a matching entry point exists, it is used for serialization.
+#    - If no match is found, the data is serialized into binary format using `PickledData`.
+#
+# - **Python Version**: Ensure the Python version on the remote computer matches the local environment.
+#   This is important since pickle is used for data storage and retrieval. Use **conda** to
+#   create and activate a virtual environment with the same Python version. Pass metadata
+#   to the scheduler to activate the environment during the job execution:
+#
+#   .. code-block:: python
+#
+#       metadata = {
+#           "options": {
+#               'custom_scheduler_commands': 'module load anaconda\nconda activate py3.11\n',
+#           }
+#       }
+#
+# --------------------------------------------------
+# Create a conda environment on the remote computer
+# --------------------------------------------------
+# One can use the `create_conda_env` function to create a conda environment
+# on the remote computer. The function will create a conda environment with
+# the specified packages and modules. The function will update the packages
+# if the environment already exists.
+#
+# .. code-block:: python
+#
+#     from aiida_pythonjob.utils import create_conda_env
+#     # create a conda environment on remote computer
+#     create_conda_env(
+#            "merlin6",                # Remote computer
+#            "test_pythonjob",         # Name of the conda environment
+#            modules=["anaconda"],     # Modules to load (e.g., Anaconda)
+#            pip=["numpy", "matplotlib"],  # Python packages to install via pip
+#            conda={                   # Conda-specific settings
+#                "channels": ["conda-forge"],  # Channels to use
+#                "dependencies": ["qe"]       # Conda packages to install
+#            }
+#        )
+#
+#
 
 ######################################################################
 # Default outputs
@@ -24,8 +68,11 @@ load_profile()
 # The default output of the function is `result`. The `PythonJob` task
 # will store the result as one node in the database with the key `result`.
 #
-from aiida.engine import run_get_node  # noqa: E402
-from aiida_pythonjob import PythonJob, prepare_pythonjob_inputs  # noqa: E402
+from aiida import load_profile
+from aiida.engine import run_get_node
+from aiida_pythonjob import PythonJob, prepare_pythonjob_inputs
+
+load_profile()
 
 
 def add(x, y):
