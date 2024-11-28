@@ -1,6 +1,6 @@
 """AiiDA plugin that run Python function on remote computers."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from .calculations import PythonJob
 from .data import PickledData, PickledFunction
