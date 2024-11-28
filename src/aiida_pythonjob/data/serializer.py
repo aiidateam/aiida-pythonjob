@@ -51,7 +51,7 @@ def get_serializer_from_entry_points() -> dict:
 eps = get_serializer_from_entry_points()
 
 
-def serialize_to_aiida_nodes(inputs: dict | None = None) -> dict:
+def serialize_to_aiida_nodes(inputs: dict) -> dict:
     """Serialize the inputs to a dictionary of AiiDA data nodes.
 
     Args:

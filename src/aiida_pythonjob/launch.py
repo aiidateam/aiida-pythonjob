@@ -1,6 +1,6 @@
 import inspect
 import os
-from typing import Any, Callable
+from typing import Any, Callable, Dict, Optional, Union
 
 from aiida.orm import AbstractCode, Computer, FolderData, List, SinglefileData, Str
 
@@ -10,18 +10,19 @@ from .utils import get_or_create_code
 
 
 def prepare_pythonjob_inputs(
-    function: Callable[..., Any] | None = None,
-    function_inputs: dict[str, Any] | None = None,
-    function_outputs: dict[str, Any] | None = None,
-    code: AbstractCode | None = None,
-    command_info: dict[str, str] | None = None,
-    computer: str | Computer = "localhost",
-    metadata: dict[str, Any] | None = None,
-    upload_files: dict[str, str] = {},
-    process_label: str | None = None,
-    pickled_function: PickledFunction | None = None,
+    function: Optional[Callable[..., Any]] = None,
+    function_inputs: Optional[Dict[str, Any]] = None,
+    function_outputs: Optional[Dict[str, Any]] = None,
+    code: Optional[AbstractCode] = None,
+    command_info: Optional[Dict[str, str]] = None,
+    computer: Union[str, Computer] = "localhost",
+    metadata: Optional[Dict[str, Any]] = None,
+    upload_files: Dict[str, str] = {},
+    process_label: Optional[str] = None,
+    pickled_function: Optional[PickledFunction] = None,
     **kwargs: Any,
-) -> dict[str, Any]:
+) -> Dict[str, Any]:
+    pass
     """Prepare the inputs for PythonJob"""
 
     if function is None and pickled_function is None:
