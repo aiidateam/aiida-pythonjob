@@ -1,3 +1,5 @@
+import inspect
+import os
 from typing import Any, Callable
 
 from aiida.orm import AbstractCode, Computer, FolderData, List, SinglefileData, Str
@@ -8,7 +10,7 @@ from .utils import get_or_create_code
 
 
 def prepare_pythonjob_inputs(
-    function: Callable[..., Any],
+    function: Callable[..., Any] | None = None,
     function_inputs: dict[str, Any] | None = None,
     function_outputs: dict[str, Any] | None = None,
     code: AbstractCode | None = None,
@@ -16,13 +18,21 @@ def prepare_pythonjob_inputs(
     computer: str | Computer = "localhost",
     metadata: dict[str, Any] | None = None,
     upload_files: dict[str, str] = {},
+    process_label: str | None = None,
+    pickled_function: PickledFunction | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
     """Prepare the inputs for PythonJob"""
-    import os
 
-    # get the names kwargs for the PythonJob, which are the inputs before _wait
-    executor = PickledFunction.build_callable(function)
+    if function is None and pickled_function is None:
+        raise ValueError("Either function or pickled_function must be provided")
+    if function is not None and pickled_function is not None:
+        raise ValueError("Only one of function or pickled_function should be provided")
+    # if function is a function, convert it to a PickledFunction
+    if function is not None and inspect.isfunction(function):
+        executor = PickledFunction.build_callable(function)
+    if pickled_function is not None:
+        executor = pickled_function
     new_upload_files = {}
     # change the string in the upload files to SingleFileData, or FolderData
     for key, source in upload_files.items():
@@ -54,7 +64,7 @@ def prepare_pythonjob_inputs(
     function_inputs = serialize_to_aiida_nodes(function_inputs)
     # transfer the args to kwargs
     inputs = {
-        "process_label": "PythonJob<{}>".format(function_name),
+        "process_label": process_label or "PythonJob<{}>".format(function_name),
         "function_source_code": Str(function_source_code),
         "function_name": Str(function_name),
         "code": code,

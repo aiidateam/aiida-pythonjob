@@ -91,16 +91,13 @@ class PythonJobParser(Parser):
         """Serialize outputs."""
 
         name = output["name"]
-        if output.get("identifier", "Any").upper() in ["NAMESPACE", "WORKGRAPH.NAMESPACE"]:
+        if output.get("identifier", "Any").upper() == "NAMESPACE":
             if isinstance(result, dict):
                 serialized_result = {}
                 for key, value in result.items():
                     full_name = f"{name}.{key}"
                     full_name_output = self.find_output(full_name)
-                    if full_name_output and full_name_output.get("identifier", "Any").upper() in [
-                        "NAMESPACE",
-                        "WORKGRAPH.NAMESPACE",
-                    ]:
+                    if full_name_output and full_name_output.get("identifier", "Any").upper() == "NAMESPACE":
                         serialized_result[key] = self.serialize_output(value, full_name_output)
                     else:
                         serialized_result[key] = general_serializer(value)
