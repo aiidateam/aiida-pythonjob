@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 
 from aiida.common.exceptions import NotExistent
 from aiida.orm import Computer, InstalledCode, load_code, load_computer
@@ -6,10 +6,10 @@ from aiida.orm import Computer, InstalledCode, load_code, load_computer
 
 def get_or_create_code(
     label: str = "python3",
-    computer: Optional[str | Computer] = "localhost",
+    computer: Optional[Union[str, "Computer"]] = "localhost",
     filepath_executable: Optional[str] = None,
     prepend_text: str = "",
-):
+) -> InstalledCode:
     """Try to load code, create if not exit."""
 
     try:
