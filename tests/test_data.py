@@ -1,3 +1,4 @@
+import aiida
 from aiida_pythonjob import PickledFunction
 
 
@@ -21,3 +22,15 @@ def test_typing():
         "builtins": {"list", "float"},
         "numpy": {"array"},
     }
+
+
+def test_python_job():
+    """Test a simple python node."""
+    from aiida_pythonjob.data.pickled_data import PickledData
+    from aiida_pythonjob.data.serializer import serialize_to_aiida_nodes
+
+    inputs = {"a": 1, "b": 2.0, "c": set()}
+    new_inputs = serialize_to_aiida_nodes(inputs)
+    assert isinstance(new_inputs["a"], aiida.orm.Int)
+    assert isinstance(new_inputs["b"], aiida.orm.Float)
+    assert isinstance(new_inputs["c"], PickledData)
