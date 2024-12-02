@@ -22,7 +22,7 @@ class PythonJobParser(Parser):
         """
         import pickle
 
-        function_outputs = self.node.inputs.function_outputs.get_list()
+        function_outputs = self.node.inputs.function_data.get_dict()["outputs"]
         if len(function_outputs) == 0:
             function_outputs = [{"name": "result"}]
         self.output_list = function_outputs

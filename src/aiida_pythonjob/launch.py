@@ -1,39 +1,38 @@
+from __future__ import annotations
+
 import inspect
 import os
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
-from aiida.orm import AbstractCode, Computer, FolderData, List, SinglefileData, Str
+from aiida import orm
 
-from .data.pickled_function import PickledFunction
 from .data.serializer import serialize_to_aiida_nodes
-from .utils import get_or_create_code
+from .utils import build_function_data, get_or_create_code
 
 
 def prepare_pythonjob_inputs(
     function: Optional[Callable[..., Any]] = None,
     function_inputs: Optional[Dict[str, Any]] = None,
-    function_outputs: Optional[Dict[str, Any]] = None,
-    code: Optional[AbstractCode] = None,
+    function_outputs: Optional[List[str | dict]] = None,
+    code: Optional[orm.AbstractCode] = None,
     command_info: Optional[Dict[str, str]] = None,
-    computer: Union[str, Computer] = "localhost",
+    computer: Union[str, orm.Computer] = "localhost",
     metadata: Optional[Dict[str, Any]] = None,
     upload_files: Dict[str, str] = {},
     process_label: Optional[str] = None,
-    pickled_function: Optional[PickledFunction] = None,
+    function_data: dict | None = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     pass
     """Prepare the inputs for PythonJob"""
 
-    if function is None and pickled_function is None:
-        raise ValueError("Either function or pickled_function must be provided")
-    if function is not None and pickled_function is not None:
-        raise ValueError("Only one of function or pickled_function should be provided")
-    # if function is a function, convert it to a PickledFunction
+    if function is None and function_data is None:
+        raise ValueError("Either function or function_data must be provided")
+    if function is not None and function_data is not None:
+        raise ValueError("Only one of function or function_data should be provided")
+    # if function is a function, inspect it and get the source code
     if function is not None and inspect.isfunction(function):
-        executor = PickledFunction.build_callable(function)
-    if pickled_function is not None:
-        executor = pickled_function
+        function_data = build_function_data(function)
     new_upload_files = {}
     # change the string in the upload files to SingleFileData, or FolderData
     for key, source in upload_files.items():
@@ -42,10 +41,10 @@ def prepare_pythonjob_inputs(
         new_key = key.replace(".", "_dot_")
         if isinstance(source, str):
             if os.path.isfile(source):
-                new_upload_files[new_key] = SinglefileData(file=source)
+                new_upload_files[new_key] = orm.SinglefileData(file=source)
             elif os.path.isdir(source):
-                new_upload_files[new_key] = FolderData(tree=source)
-        elif isinstance(source, (SinglefileData, FolderData)):
+                new_upload_files[new_key] = orm.FolderData(tree=source)
+        elif isinstance(source, (orm.SinglefileData, orm.FolderData)):
             new_upload_files[new_key] = source
         else:
             raise ValueError(f"Invalid upload file type: {type(source)}, {source}")
@@ -54,11 +53,13 @@ def prepare_pythonjob_inputs(
         command_info = command_info or {}
         code = get_or_create_code(computer=computer, **command_info)
     # get the source code of the function
-    function_name = executor["name"]
-    if executor.get("is_pickle", False):
-        function_source_code = executor["import_statements"] + "\n" + executor["source_code_without_decorator"]
+    function_name = function_data["name"]
+    if function_data.get("is_pickle", False):
+        function_source_code = (
+            function_data["import_statements"] + "\n" + function_data["source_code_without_decorator"]
+        )
     else:
-        function_source_code = f"from {executor['module']} import {function_name}"
+        function_source_code = f"from {function_data['module']} import {function_name}"
 
     # serialize the kwargs into AiiDA Data
     function_inputs = function_inputs or {}
@@ -66,12 +67,16 @@ def prepare_pythonjob_inputs(
     # transfer the args to kwargs
     inputs = {
         "process_label": process_label or "PythonJob<{}>".format(function_name),
-        "function_source_code": Str(function_source_code),
-        "function_name": Str(function_name),
+        "function_data": orm.Dict(
+            {
+                "source_code": function_source_code,
+                "name": function_name,
+                "outputs": function_outputs or [],
+            }
+        ),
         "code": code,
         "function_inputs": function_inputs,
         "upload_files": new_upload_files,
-        "function_outputs": List(function_outputs),
         "metadata": metadata or {},
         **kwargs,
     }

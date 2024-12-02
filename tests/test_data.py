@@ -1,5 +1,5 @@
 import aiida
-from aiida_pythonjob import PickledFunction
+from aiida_pythonjob.utils import get_required_imports
 
 
 def test_typing():
@@ -16,7 +16,7 @@ def test_typing():
     ) -> list[array]:
         pass
 
-    modules = PickledFunction.get_required_imports(generate_structures)
+    modules = get_required_imports(generate_structures)
     assert modules == {
         "typing": {"List"},
         "builtins": {"list", "float"},
