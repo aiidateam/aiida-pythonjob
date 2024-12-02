@@ -34,3 +34,13 @@ def test_python_job():
     assert isinstance(new_inputs["a"], aiida.orm.Int)
     assert isinstance(new_inputs["b"], aiida.orm.Float)
     assert isinstance(new_inputs["c"], PickledData)
+
+
+def test_atoms_data():
+    from aiida_pythonjob.data.atoms import AtomsData
+    from ase.build import bulk
+
+    atoms = bulk("Si")
+
+    atoms_data = AtomsData(atoms)
+    assert atoms_data.value == atoms
