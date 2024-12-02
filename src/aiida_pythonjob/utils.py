@@ -39,34 +39,31 @@ def get_required_imports(func: Callable) -> Dict[str, set]:
 
 def inspect_function(func: Callable) -> Dict[str, Any]:
     """Serialize a function for storage or transmission."""
+    # we need save the source code explicitly, because in the case of jupyter notebook,
+    # the source code is not saved in the pickle file
     try:
-        # we need save the source code explicitly, because in the case of jupyter notebook,
-        # the source code is not saved in the pickle file
         source_code = inspect.getsource(func)
-        # Split the source into lines for processing
-        source_code_lines = source_code.split("\n")
-        function_source_code = "\n".join(source_code_lines)
-        # Find the first line of the actual function definition
-        for i, line in enumerate(source_code_lines):
-            if line.strip().startswith("def "):
-                break
-        function_source_code_without_decorator = "\n".join(source_code_lines[i:])
-        function_source_code_without_decorator = textwrap.dedent(function_source_code_without_decorator)
-        # we also need to include the necessary imports for the types used in the type hints.
-        try:
-            required_imports = get_required_imports(func)
-        except Exception as e:
-            required_imports = {}
-            print(f"Failed to get required imports for function {func.__name__}: {e}")
-        # Generate import statements
-        import_statements = "\n".join(
-            f"from {module} import {', '.join(types)}" for module, types in required_imports.items()
-        )
-    except Exception as e:
-        print(f"Failed to inspect function {func.__name__}: {e}")
-        function_source_code = ""
-        function_source_code_without_decorator = ""
-        import_statements = ""
+    except OSError:
+        raise ValueError("Failed to get the source code of the function.")
+
+    # Split the source into lines for processing
+    source_code_lines = source_code.split("\n")
+    function_source_code = "\n".join(source_code_lines)
+    # Find the first line of the actual function definition
+    for i, line in enumerate(source_code_lines):
+        if line.strip().startswith("def "):
+            break
+    function_source_code_without_decorator = "\n".join(source_code_lines[i:])
+    function_source_code_without_decorator = textwrap.dedent(function_source_code_without_decorator)
+    # we also need to include the necessary imports for the types used in the type hints.
+    try:
+        required_imports = get_required_imports(func)
+    except Exception as exception:
+        raise ValueError(f"Failed to get the required imports for the function: {exception}")
+    # Generate import statements
+    import_statements = "\n".join(
+        f"from {module} import {', '.join(types)}" for module, types in required_imports.items()
+    )
     return {
         "name": func.__name__,
         "source_code": function_source_code,
@@ -80,7 +77,7 @@ def build_function_data(func):
     """Return the executor for this node."""
     import types
 
-    if isinstance(func, (types.FunctionType, type)):
+    if isinstance(func, (types.FunctionType, types.BuiltinFunctionType, type)):
         # Check if callable is nested (contains dots in __qualname__ after the first segment)
         if func.__module__ == "__main__" or "." in func.__qualname__.split(".", 1)[-1]:
             # Local or nested callable, so pickle the callable
@@ -235,7 +232,7 @@ def create_conda_env(
         if retval != 0:
             return (
                 False,
-                f"The command `echo -n` returned a non-zero return code ({retval})",
+                f"The command returned a non-zero return code ({retval})",
             )
 
         template = """
