@@ -1,5 +1,5 @@
 import aiida
-from aiida_pythonjob import PickledFunction
+from aiida_pythonjob.utils import get_required_imports
 
 
 def test_typing():
@@ -16,7 +16,7 @@ def test_typing():
     ) -> list[array]:
         pass
 
-    modules = PickledFunction.get_required_imports(generate_structures)
+    modules = get_required_imports(generate_structures)
     assert modules == {
         "typing": {"List"},
         "builtins": {"list", "float"},
@@ -34,3 +34,13 @@ def test_python_job():
     assert isinstance(new_inputs["a"], aiida.orm.Int)
     assert isinstance(new_inputs["b"], aiida.orm.Float)
     assert isinstance(new_inputs["c"], PickledData)
+
+
+def test_atoms_data():
+    from aiida_pythonjob.data.atoms import AtomsData
+    from ase.build import bulk
+
+    atoms = bulk("Si")
+
+    atoms_data = AtomsData(atoms)
+    assert atoms_data.value == atoms

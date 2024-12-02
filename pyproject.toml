@@ -22,6 +22,7 @@ keywords = ["aiida", "plugin"]
 requires-python = ">=3.9"
 dependencies = [
     "aiida-core>=2.3,<3",
+    "ase",
     "cloudpickle",
     "voluptuous"
 ]
@@ -46,7 +47,6 @@ Source = "https://github.com/aiidateam/aiida-pythonjob"
 
 [project.entry-points."aiida.data"]
 "pythonjob.pickled_data" = "aiida_pythonjob.data.pickled_data:PickledData"
-"pythonjob.pickled_function" = "aiida_pythonjob.data.pickled_function:PickledFunction"
 "pythonjob.ase.atoms.Atoms" = "aiida_pythonjob.data.atoms:AtomsData"
 "pythonjob.builtins.int" = "aiida.orm.nodes.data.int:Int"
 "pythonjob.builtins.float" = "aiida.orm.nodes.data.float:Float"

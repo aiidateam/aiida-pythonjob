@@ -1,7 +1,97 @@
-from typing import Dict, List, Optional, Tuple, Union
+import inspect
+import textwrap
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, _SpecialForm, get_type_hints
 
 from aiida.common.exceptions import NotExistent
 from aiida.orm import Computer, InstalledCode, User, load_code, load_computer
+
+
+def get_required_imports(func: Callable) -> Dict[str, set]:
+    """Retrieve type hints and the corresponding modules."""
+    type_hints = get_type_hints(func)
+    imports = {}
+
+    def add_imports(type_hint):
+        if isinstance(type_hint, _SpecialForm):  # Handle special forms like Any, Union, Optional
+            module_name = "typing"
+            type_name = type_hint._name or str(type_hint)
+        elif hasattr(type_hint, "__origin__"):  # This checks for higher-order types like List, Dict
+            module_name = type_hint.__module__
+            type_name = getattr(type_hint, "_name", None) or getattr(type_hint.__origin__, "__name__", None)
+            for arg in getattr(type_hint, "__args__", []):
+                if arg is type(None):
+                    continue
+                add_imports(arg)  # Recursively add imports for each argument
+        elif hasattr(type_hint, "__module__"):
+            module_name = type_hint.__module__
+            type_name = type_hint.__name__
+        else:
+            return  # If no module or origin, we can't import it, e.g., for literals
+        if type_name is not None:
+            if module_name not in imports:
+                imports[module_name] = set()
+            imports[module_name].add(type_name)
+
+    for _, type_hint in type_hints.items():
+        add_imports(type_hint)
+    return imports
+
+
+def inspect_function(func: Callable) -> Dict[str, Any]:
+    """Serialize a function for storage or transmission."""
+    # we need save the source code explicitly, because in the case of jupyter notebook,
+    # the source code is not saved in the pickle file
+    try:
+        source_code = inspect.getsource(func)
+    except OSError:
+        raise ValueError("Failed to get the source code of the function.")
+
+    # Split the source into lines for processing
+    source_code_lines = source_code.split("\n")
+    function_source_code = "\n".join(source_code_lines)
+    # Find the first line of the actual function definition
+    for i, line in enumerate(source_code_lines):
+        if line.strip().startswith("def "):
+            break
+    function_source_code_without_decorator = "\n".join(source_code_lines[i:])
+    function_source_code_without_decorator = textwrap.dedent(function_source_code_without_decorator)
+    # we also need to include the necessary imports for the types used in the type hints.
+    try:
+        required_imports = get_required_imports(func)
+    except Exception as exception:
+        raise ValueError(f"Failed to get the required imports for the function: {exception}")
+    # Generate import statements
+    import_statements = "\n".join(
+        f"from {module} import {', '.join(types)}" for module, types in required_imports.items()
+    )
+    return {
+        "name": func.__name__,
+        "source_code": function_source_code,
+        "source_code_without_decorator": function_source_code_without_decorator,
+        "import_statements": import_statements,
+        "is_pickle": True,
+    }
+
+
+def build_function_data(func):
+    """Return the executor for this node."""
+    import types
+
+    if isinstance(func, (types.FunctionType, types.BuiltinFunctionType, type)):
+        # Check if callable is nested (contains dots in __qualname__ after the first segment)
+        if func.__module__ == "__main__" or "." in func.__qualname__.split(".", 1)[-1]:
+            # Local or nested callable, so pickle the callable
+            executor = inspect_function(func)
+        else:
+            # Global callable (function/class), store its module and name for reference
+            executor = {
+                "module": func.__module__,
+                "name": func.__name__,
+                "is_pickle": False,
+            }
+    else:
+        raise TypeError("Provided object is not a callable function or class.")
+    return executor
 
 
 def get_or_create_code(
@@ -142,7 +232,7 @@ def create_conda_env(
         if retval != 0:
             return (
                 False,
-                f"The command `echo -n` returned a non-zero return code ({retval})",
+                f"The command returned a non-zero return code ({retval})",
             )
 
         template = """

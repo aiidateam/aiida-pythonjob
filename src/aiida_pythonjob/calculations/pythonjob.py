@@ -11,6 +11,7 @@ from aiida.common.folders import Folder
 from aiida.engine import CalcJob, CalcJobProcessSpec
 from aiida.orm import (
     Data,
+    Dict,
     FolderData,
     List,
     RemoteData,
@@ -18,8 +19,6 @@ from aiida.orm import (
     Str,
     to_aiida_type,
 )
-
-from aiida_pythonjob.data.pickled_function import PickledFunction, to_pickled_function
 
 __all__ = ("PythonJob",)
 
@@ -42,31 +41,11 @@ class PythonJob(CalcJob):
         :param spec: the calculation job process spec to define.
         """
         super().define(spec)
-        spec.input(
-            "function",
-            valid_type=PickledFunction,
-            serializer=to_pickled_function,
-            required=False,
-        )
-        spec.input(
-            "function_source_code",
-            valid_type=Str,
-            serializer=to_aiida_type,
-            required=False,
-        )
-        spec.input("function_name", valid_type=Str, serializer=to_aiida_type, required=False)
+        spec.input("function_data", valid_type=Dict, serializer=to_aiida_type, required=False)
         spec.input("process_label", valid_type=Str, serializer=to_aiida_type, required=False)
         spec.input_namespace(
             "function_inputs", valid_type=Data, required=False
         )  # , serializer=serialize_to_aiida_nodes)
-        spec.input(
-            "function_outputs",
-            valid_type=List,
-            default=lambda: List(),
-            required=False,
-            serializer=to_aiida_type,
-            help="The information of the output ports",
-        )
         spec.input(
             "parent_folder",
             valid_type=(RemoteData, FolderData, SinglefileData),
@@ -155,21 +134,6 @@ class PythonJob(CalcJob):
         super().on_create()
         self.node.label = self._build_process_label()
 
-    def get_function_data(self) -> dict[str, t.Any]:
-        """Get the function data.
-
-        :returns: The function data.
-        """
-        if "function" in self.inputs:
-            metadata = self.inputs.function.metadata
-            metadata["source_code"] = metadata["import_statements"] + "\n" + metadata["source_code_without_decorator"]
-            return metadata
-        else:
-            return {
-                "source_code": self.inputs.function_source_code.value,
-                "name": self.inputs.function_name.value,
-            }
-
     def prepare_for_submission(self, folder: Folder) -> CalcInfo:
         """Prepare the calculation for submission.
 
@@ -192,7 +156,7 @@ class PythonJob(CalcJob):
             parent_folder_name = self.inputs.parent_folder_name.value
         else:
             parent_folder_name = self._DEFAULT_PARENT_FOLDER_NAME
-        function_data = self.get_function_data()
+        function_data = self.inputs.function_data.get_dict()
         # create python script to run the function
         script = f"""
 import pickle
