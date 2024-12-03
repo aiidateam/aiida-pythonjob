@@ -125,7 +125,7 @@ class PythonJob(CalcJob):
         if "process_label" in self.inputs:
             return self.inputs.process_label.value
         else:
-            data = self.get_function_data()
+            data = self.inputs.function_data.get_dict()
             return f"PythonJob<{data['name']}>"
 
     def on_create(self) -> None:
