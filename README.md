@@ -4,7 +4,14 @@
 [![codecov](https://codecov.io/gh/aiidateam/aiida-pythonjob/branch/main/graph/badge.svg)](https://codecov.io/gh/aiidateam/aiida-pythonjob)
 [![Docs status](https://readthedocs.org/projects/aiida-pythonjob/badge)](http://aiida-pythonjob.readthedocs.io/)
 
-Efficiently design and manage flexible workflows with AiiDA, featuring an interactive GUI, checkpoints, provenance tracking, error-resistant, and remote execution capabilities.
+`PythonJob` allows users to run Python functions on a remote computer. It is designed to enable users from non-AiiDA communities to run their Python functions remotely and construct workflows with checkpoints, maintaining all data provenance. For instance, users can use ASE's calculator to run a DFT calculation on a remote computer directly.
+
+## Key Features
+
+1. **Remote Execution**: Seamlessly run Python functions on a remote computer.
+2. **User-Friendly**: Designed for users who are not familiar with AiiDA, simplifying the process of remote execution.
+3. **Workflow Management**: Construct workflows using WorkGraph with checkpoints, ensuring that intermediate states and results are preserved.
+4. **Data Provenance**: Maintain comprehensive data provenance, tracking the full history and transformations of data.
 
 
 
