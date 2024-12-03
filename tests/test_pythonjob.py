@@ -1,6 +1,26 @@
+import os
+import pathlib
+import tempfile
+
 import pytest
+from aiida import orm
 from aiida.engine import run_get_node
 from aiida_pythonjob import PythonJob, prepare_pythonjob_inputs
+
+
+def test_validate_inputs():
+    def add(x, y):
+        return x + y
+
+    with pytest.raises(ValueError, match="Either function or function_data must be provided"):
+        prepare_pythonjob_inputs(
+            function_inputs={"x": 1, "y": 2},
+        )
+    with pytest.raises(ValueError, match="Only one of function or function_data should be provided"):
+        prepare_pythonjob_inputs(
+            function=add,
+            function_data={"module": "math", "name": "sqrt", "is_pickle": False},
+        )
 
 
 def test_function_default_outputs(fixture_localhost):
@@ -14,7 +34,6 @@ def test_function_default_outputs(fixture_localhost):
         function_inputs={"x": 1, "y": 2},
     )
     result, node = run_get_node(PythonJob, **inputs)
-    print("result: ", result)
 
     assert result["result"].value == 3
     assert node.process_label == "PythonJob<add>"
@@ -34,10 +53,12 @@ def test_function_custom_outputs(fixture_localhost):
             {"name": "diff"},
         ],
     )
+    inputs.pop("process_label")
     result, node = run_get_node(PythonJob, **inputs)
 
     assert result["sum"].value == 3
     assert result["diff"].value == -1
+    assert node.process_label == "PythonJob<add>"
 
 
 @pytest.mark.skip("Can not inspect the built-in function.")
@@ -110,7 +131,7 @@ def test_namespace_output(fixture_localhost):
     assert result["add_multiply"]["multiply"].value == 2
 
 
-def test_parent_folder(fixture_localhost):
+def test_parent_folder_remote(fixture_localhost):
     """Test function with parent folder."""
 
     def add(x, y):
@@ -142,43 +163,70 @@ def test_parent_folder(fixture_localhost):
     assert result2["product"].value == 5
 
 
+def test_parent_folder_local(fixture_localhost):
+    """Test function with parent folder."""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        dirpath = pathlib.Path(tmpdir)
+        with open((dirpath / "result.txt"), "w") as f:
+            f.write("3")
+
+        parent_folder = orm.FolderData(tree=dirpath.absolute())
+
+        def multiply(x, y):
+            with open("parent_folder/result.txt", "r") as f:
+                z = int(f.read())
+            return x * y + z
+
+        inputs2 = prepare_pythonjob_inputs(
+            multiply,
+            function_inputs={"x": 1, "y": 2},
+            function_outputs=[{"name": "product"}],
+            parent_folder=parent_folder,
+        )
+        result2, node2 = run_get_node(PythonJob, inputs=inputs2)
+
+        assert result2["product"].value == 5
+
+
 def test_upload_files(fixture_localhost):
     """Test function with upload files."""
-
-    # create a temporary file "input.txt" in the current directory
-    with open("input.txt", "w") as f:
-        f.write("2")
-
-    # create a temporary folder "inputs_folder" in the current directory
-    # and add a file "another_input.txt" in the folder
-    import os
-
-    os.makedirs("inputs_folder", exist_ok=True)
-    with open("inputs_folder/another_input.txt", "w") as f:
-        f.write("3")
 
     def add():
         with open("input.txt", "r") as f:
             a = int(f.read())
-        with open("inputs_folder/another_input.txt", "r") as f:
+        with open("another_input.txt", "r") as f:
             b = int(f.read())
-        return a + b
+        with open("inputs_folder/another_input.txt", "r") as f:
+            c = int(f.read())
+        return a + b + c
 
-    # ------------------------- Submit the calculation -------------------
-    # we need use full path to the file
-    input_file = os.path.abspath("input.txt")
-    input_folder = os.path.abspath("inputs_folder")
-    inputs = prepare_pythonjob_inputs(
-        add,
-        upload_files={
-            "input.txt": input_file,
-            "inputs_folder": input_folder,
-        },
-    )
-    result, node = run_get_node(PythonJob, inputs=inputs)
-
-    # wait=True)
-    assert result["result"].value == 5
+    # create a temporary file "input.txt" in the current directory
+    with tempfile.TemporaryDirectory() as tmpdir:
+        dirpath = pathlib.Path(tmpdir)
+        with open((dirpath / "input.txt"), "w") as f:
+            f.write("2")
+        with open((dirpath / "another_input.txt"), "w") as f:
+            f.write("3")
+        # create a temporary folder "inputs_folder"
+        os.makedirs((dirpath / "inputs_folder"), exist_ok=True)
+        with open((dirpath / "inputs_folder/another_input.txt"), "w") as f:
+            f.write("4")
+        # we need use full path to the file
+        input_file = str(dirpath / "input.txt")
+        input_folder = str(dirpath / "inputs_folder")
+        single_file_data = orm.SinglefileData(file=(dirpath / "another_input.txt"))
+        # ------------------------- Submit the calculation -------------------
+        inputs = prepare_pythonjob_inputs(
+            add,
+            upload_files={
+                "input.txt": input_file,
+                "another_input.txt": single_file_data,
+                "inputs_folder": input_folder,
+            },
+        )
+        result, node = run_get_node(PythonJob, inputs=inputs)
+        assert result["result"].value == 9
 
 
 def test_retrieve_files(fixture_localhost):

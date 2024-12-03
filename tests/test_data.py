@@ -37,6 +37,15 @@ def test_python_job():
     assert isinstance(new_inputs["c"], PickledData)
 
 
+def test_dict_list():
+    from aiida_pythonjob.data.data_with_value import Dict, List
+
+    data = List([1, 2, 3])
+    assert data.value == [1, 2, 3]
+    data = Dict({"a": 1, "b": 2})
+    assert data.value == {"a": 1, "b": 2}
+
+
 def test_atoms_data():
     from aiida_pythonjob.data.atoms import AtomsData
     from ase.build import bulk
