@@ -33,12 +33,10 @@ def get_serializer_from_entry_points() -> dict:
         eps.setdefault(key, [])
         eps[key].append(ep)
 
-    # print("Time to load entry points: ", time.time() - ts)
     # check if there are duplicates
     for key, value in eps.items():
         if len(value) > 1:
             if key in serializers:
-                [ep for ep in value if ep.name == serializers[key]]
                 eps[key] = [ep for ep in value if ep.name == serializers[key]]
                 if not eps[key]:
                     raise ValueError(f"Entry point {serializers[key]} not found for {key}")
@@ -105,13 +103,7 @@ def general_serializer(data: Any, check_value=True) -> orm.Node:
                     new_node.store()
                     return new_node
                 except Exception:
-                    # try to serialize the value as a PickledData
-                    try:
-                        new_node = PickledData(data)
-                        new_node.store()
-                        return new_node
-                    except Exception as e:
-                        raise ValueError(f"Error in serializing {ep_key}: {e}")
+                    raise ValueError(f"Error in storing data {ep_key}")
         else:
             # try to serialize the data as a PickledData
             try:

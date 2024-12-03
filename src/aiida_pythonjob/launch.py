@@ -44,6 +44,8 @@ def prepare_pythonjob_inputs(
                 new_upload_files[new_key] = orm.SinglefileData(file=source)
             elif os.path.isdir(source):
                 new_upload_files[new_key] = orm.FolderData(tree=source)
+            else:
+                raise ValueError(f"Invalid upload file path: {source}")
         elif isinstance(source, (orm.SinglefileData, orm.FolderData)):
             new_upload_files[new_key] = source
         else:

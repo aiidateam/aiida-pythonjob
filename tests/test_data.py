@@ -1,4 +1,5 @@
 import aiida
+from aiida_pythonjob.data import general_serializer
 from aiida_pythonjob.utils import get_required_imports
 
 
@@ -36,6 +37,15 @@ def test_python_job():
     assert isinstance(new_inputs["c"], PickledData)
 
 
+def test_dict_list():
+    from aiida_pythonjob.data.data_with_value import Dict, List
+
+    data = List([1, 2, 3])
+    assert data.value == [1, 2, 3]
+    data = Dict({"a": 1, "b": 2})
+    assert data.value == {"a": 1, "b": 2}
+
+
 def test_atoms_data():
     from aiida_pythonjob.data.atoms import AtomsData
     from ase.build import bulk
@@ -44,3 +54,10 @@ def test_atoms_data():
 
     atoms_data = AtomsData(atoms)
     assert atoms_data.value == atoms
+
+
+def test_only_data_with_value():
+    try:
+        general_serializer(aiida.orm.List([1]))
+    except ValueError as e:
+        assert str(e) == "Only AiiDA data Node with a value attribute is allowed."
