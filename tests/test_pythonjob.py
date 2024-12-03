@@ -205,6 +205,30 @@ def test_retrieve_files(fixture_localhost):
     assert "result.txt" in result["retrieved"].list_object_names()
 
 
+def test_copy_files(fixture_localhost):
+    """Test function with copy files."""
+
+    def add(x, y):
+        z = x + y
+        with open("result.txt", "w") as f:
+            f.write(str(z))
+
+    def multiply(x_folder_name, y):
+        with open(f"{x_folder_name}/result.txt", "r") as f:
+            x = int(f.read())
+        return x * y
+
+    inputs = prepare_pythonjob_inputs(add, function_inputs={"x": 1, "y": 2})
+    result, node = run_get_node(PythonJob, inputs=inputs)
+    inputs = prepare_pythonjob_inputs(
+        multiply,
+        function_inputs={"x_folder_name": "x_folder_name", "y": 2},
+        copy_files={"x_folder_name": result["remote_folder"]},
+    )
+    result, node = run_get_node(PythonJob, inputs=inputs)
+    assert result["result"].value == 6
+
+
 def test_exit_code(fixture_localhost):
     """Test function with exit code."""
     from numpy import array

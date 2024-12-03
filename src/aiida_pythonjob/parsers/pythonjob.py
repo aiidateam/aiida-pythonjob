@@ -45,8 +45,22 @@ class PythonJobParser(Parser):
                         elif isinstance(exit_code, int):
                             exit_code = ExitCode(exit_code)
                         return exit_code
-
-                    if len(top_level_output_list) > 1:
+                    if len(top_level_output_list) == 1:
+                        # if output name in results, use it
+                        if top_level_output_list[0]["name"] in results:
+                            top_level_output_list[0]["value"] = self.serialize_output(
+                                results.pop(top_level_output_list[0]["name"]),
+                                top_level_output_list[0],
+                            )
+                            # if there are any remaining results, raise an warning
+                            if len(results) > 0:
+                                self.logger.warning(
+                                    f"Found extra results that are not included in the output: {results.keys()}"
+                                )
+                        # otherwise, we assume the results is the output
+                        else:
+                            top_level_output_list[0]["value"] = self.serialize_output(results, top_level_output_list[0])
+                    elif len(top_level_output_list) > 1:
                         for output in top_level_output_list:
                             if output["name"] not in results:
                                 if output.get("required", True):
@@ -54,20 +68,11 @@ class PythonJobParser(Parser):
                             else:
                                 output["value"] = self.serialize_output(results.pop(output["name"]), output)
                         # if there are any remaining results, raise an warning
-                        if results:
+                        if len(results) > 0:
                             self.logger.warning(
                                 f"Found extra results that are not included in the output: {results.keys()}"
                             )
-                    elif len(top_level_output_list) == 1:
-                        # if output name in results, use it
-                        if top_level_output_list[0]["name"] in results:
-                            top_level_output_list[0]["value"] = self.serialize_output(
-                                results[top_level_output_list[0]["name"]],
-                                top_level_output_list[0],
-                            )
-                        # otherwise, we assume the results is the output
-                        else:
-                            top_level_output_list[0]["value"] = self.serialize_output(results, top_level_output_list[0])
+
                 elif len(top_level_output_list) == 1:
                     # otherwise it returns a single value, we assume the results is the output
                     top_level_output_list[0]["value"] = self.serialize_output(results, top_level_output_list[0])
@@ -78,9 +83,6 @@ class PythonJobParser(Parser):
         except OSError:
             return self.exit_codes.ERROR_READING_OUTPUT_FILE
         except ValueError as exception:
-            self.logger.error(exception)
-            return self.exit_codes.ERROR_INVALID_OUTPUT
-        except Exception as exception:
             self.logger.error(exception)
             return self.exit_codes.ERROR_INVALID_OUTPUT
 

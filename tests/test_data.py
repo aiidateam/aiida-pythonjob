@@ -1,4 +1,5 @@
 import aiida
+from aiida_pythonjob.data import general_serializer
 from aiida_pythonjob.utils import get_required_imports
 
 
@@ -44,3 +45,10 @@ def test_atoms_data():
 
     atoms_data = AtomsData(atoms)
     assert atoms_data.value == atoms
+
+
+def test_only_data_with_value():
+    try:
+        general_serializer(aiida.orm.List([1]))
+    except ValueError as e:
+        assert str(e) == "Only AiiDA data Node with a value attribute is allowed."
