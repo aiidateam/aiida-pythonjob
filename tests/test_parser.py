@@ -5,7 +5,6 @@ import cloudpickle as pickle
 from aiida import orm
 from aiida.cmdline.utils.common import get_workchain_report
 from aiida.common.links import LinkType
-from aiida_pythonjob.parsers import PythonJobParser
 
 
 def create_retrieved_folder(result: dict, output_filename="results.pickle"):
@@ -32,6 +31,8 @@ def create_process_node(result: dict, function_data: dict, output_filename: str 
 
 
 def create_parser(result, function_data, output_filename="results.pickle"):
+    from aiida_pythonjob.parsers import PythonJobParser
+
     node = create_process_node(result, function_data, output_filename=output_filename)
     parser = PythonJobParser(node=node)
     return parser
