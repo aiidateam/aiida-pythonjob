@@ -1,11 +1,13 @@
 import json
+from pathlib import Path
 
-from aiida.manage.configuration.settings import AIIDA_CONFIG_FOLDER
+from aiida.manage import get_config
 
 
 def load_config() -> dict:
     """Load the configuration from the config file."""
-    config_file_path = AIIDA_CONFIG_FOLDER / "pythonjob.json"
+    config = get_config()
+    config_file_path = Path(config.dirpath) / "pythonjob.json"
     try:
         with config_file_path.open("r") as f:
             config = json.load(f)
