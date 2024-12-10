@@ -1,12 +1,11 @@
 import aiida
-from aiida_pythonjob.data import general_serializer
-from aiida_pythonjob.utils import get_required_imports
 
 
 def test_typing():
     """Test function with typing."""
     from typing import List
 
+    from aiida_pythonjob.utils import get_required_imports
     from numpy import array
 
     def generate_structures(
@@ -57,6 +56,8 @@ def test_atoms_data():
 
 
 def test_only_data_with_value():
+    from aiida_pythonjob.data import general_serializer
+
     try:
         general_serializer(aiida.orm.List([1]))
     except ValueError as e:
