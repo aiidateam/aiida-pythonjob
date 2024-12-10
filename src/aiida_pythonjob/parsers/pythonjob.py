@@ -3,8 +3,6 @@
 from aiida.engine import ExitCode
 from aiida.parsers.parser import Parser
 
-from aiida_pythonjob.data.serializer import general_serializer
-
 
 class PythonJobParser(Parser):
     """Parser for an `PythonJob` job."""
@@ -95,6 +93,7 @@ class PythonJobParser(Parser):
 
     def serialize_output(self, result, output):
         """Serialize outputs."""
+        from aiida_pythonjob.data.serializer import general_serializer
 
         name = output["name"]
         if output.get("identifier", "Any").upper() == "NAMESPACE":

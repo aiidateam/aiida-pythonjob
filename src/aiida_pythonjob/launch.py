@@ -6,7 +6,6 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 from aiida import orm
 
-from .data.serializer import serialize_to_aiida_nodes
 from .utils import build_function_data, get_or_create_code
 
 
@@ -23,8 +22,8 @@ def prepare_pythonjob_inputs(
     function_data: dict | None = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    pass
     """Prepare the inputs for PythonJob"""
+    from .data.serializer import serialize_to_aiida_nodes
 
     if function is None and function_data is None:
         raise ValueError("Either function or function_data must be provided")
