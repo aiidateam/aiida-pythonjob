@@ -24,6 +24,9 @@ class AtomsData(Data):
 
     @classmethod
     def atoms2dict(cls, atoms):
+        """Convert ASE Atoms to a dictionary."""
+        # we remove the calculator as it may not be JSON serializable
+        atoms.calc = None
         data = atoms2dict(atoms)
         data.pop("unique_id")
         keys = list(data.keys())
