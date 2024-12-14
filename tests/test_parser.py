@@ -96,6 +96,13 @@ def test_dict_result_only_show_one_output(fixture_localhost):
 
 
 def test_exit_code(fixture_localhost):
+    result = {"a": 1, "exit_code": {"status": 0, "message": ""}}
+    function_data = {"outputs": [{"name": "a"}]}
+    parser = create_parser(result, function_data)
+    exit_code = parser.parse()
+    assert exit_code is None
+    assert parser.outputs["a"] == 1
+    #
     result = {"exit_code": {"status": 1, "message": "error"}}
     function_data = {"outputs": [{"name": "a"}, {"name": "b"}, {"name": "c"}]}
     parser = create_parser(result, function_data)

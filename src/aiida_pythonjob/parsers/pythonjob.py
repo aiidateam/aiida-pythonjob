@@ -36,13 +36,14 @@ class PythonJobParser(Parser):
                         top_level_output_list[i]["value"] = self.serialize_output(results[i], top_level_output_list[i])
                 elif isinstance(results, dict):
                     # pop the exit code if it exists
-                    exit_code = results.pop("exit_code", 0)
+                    exit_code = results.pop("exit_code", None)
                     if exit_code:
                         if isinstance(exit_code, dict):
                             exit_code = ExitCode(exit_code["status"], exit_code["message"])
                         elif isinstance(exit_code, int):
                             exit_code = ExitCode(exit_code)
-                        return exit_code
+                        if exit_code.status != 0:
+                            return exit_code
                     if len(top_level_output_list) == 1:
                         # if output name in results, use it
                         if top_level_output_list[0]["name"] in results:
