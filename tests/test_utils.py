@@ -5,7 +5,12 @@ def test_build_function_data():
     from math import sqrt
 
     function_data = build_function_data(sqrt)
-    assert function_data == {"module": "math", "name": "sqrt", "is_pickle": False}
+    assert function_data == {
+        "name": "sqrt",
+        "mode": "use_module_path",
+        "module_path": "math",
+        "source_code": "from math import sqrt",
+    }
     #
     try:
         function_data = build_function_data(1)

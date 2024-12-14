@@ -53,32 +53,18 @@ def prepare_pythonjob_inputs(
     if code is None:
         command_info = command_info or {}
         code = get_or_create_code(computer=computer, **command_info)
-    # get the source code of the function
-    function_name = function_data["name"]
-    if function_data.get("is_pickle", False):
-        function_source_code = (
-            function_data["import_statements"] + "\n" + function_data["source_code_without_decorator"]
-        )
-    else:
-        function_source_code = f"from {function_data['module']} import {function_name}"
-
     # serialize the kwargs into AiiDA Data
     function_inputs = function_inputs or {}
     function_inputs = serialize_to_aiida_nodes(function_inputs)
-    # transfer the args to kwargs
+    function_data["outputs"] = function_outputs or [{"name": "result"}]
     inputs = {
-        "process_label": process_label or "PythonJob<{}>".format(function_name),
-        "function_data": orm.Dict(
-            {
-                "source_code": function_source_code,
-                "name": function_name,
-                "outputs": function_outputs or [],
-            }
-        ),
+        "function_data": function_data,
         "code": code,
         "function_inputs": function_inputs,
         "upload_files": new_upload_files,
         "metadata": metadata or {},
         **kwargs,
     }
+    if process_label:
+        inputs[process_label] = process_label
     return inputs
