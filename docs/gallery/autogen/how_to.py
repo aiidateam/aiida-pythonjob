@@ -280,10 +280,48 @@ print("scaled_structures: ")
 for key, value in result["scaled_structures"].items():
     print(key, value)
 
+
+######################################################################
+# What if my calculation fails?
+# --------------------------------
+#
+# The `PythonJobParser` can return specialized exit codes when different
+# kinds of errors occur during the calculation:
+#
+# - ``ERROR_READING_OUTPUT_FILE`` (310):
+#     The retrieved output file (e.g., `results.pickle`) could not be opened or read.
+#
+# - ``ERROR_INVALID_OUTPUT`` (320):
+#     The output file is corrupt or contains unexpected/invalid data structures.
+#
+# - ``ERROR_RESULT_OUTPUT_MISMATCH`` (321):
+#     The number of actual results does not match the number/structure of expected outputs.
+#
+# - ``ERROR_IMPORT_CLOUDPICKLE_FAILED`` (322):
+#     The script on the remote machine failed to import `cloudpickle`.
+#     The script writes ``error.json`` describing the ImportError.
+#
+# - ``ERROR_UNPICKLE_INPUTS_FAILED`` (323):
+#     The script failed to unpickle the input data (e.g., `inputs.pickle`).
+#
+# - ``ERROR_UNPICKLE_FUNCTION_FAILED`` (324):
+#     The script failed to load the pickled function (e.g., `function.pkl`).
+#
+# - ``ERROR_FUNCTION_EXECUTION_FAILED`` (325):
+#     An exception was raised during the function call.
+#
+# - ``ERROR_PICKLE_RESULTS_FAILED`` (326):
+#     The script failed to pickle (serialize) the final results.
+#
+# - ``ERROR_SCRIPT_FAILED`` (327):
+#     A catch-all exit code if none of the above match. Indicates an unknown/unrecognized error.
+#
+
+
 ######################################################################
 # Exit Code
 # --------------
-#
+# Users can define custom exit codes to indicate the status of the task.
 #
 # When the function returns a dictionary with an `exit_code` key, the system
 # automatically parses and uses this code to indicate the task's status. In
