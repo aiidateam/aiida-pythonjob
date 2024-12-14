@@ -31,7 +31,7 @@ pip install -e .
 
 
 ## Documentation
-Explore the comprehensive [documentation](https://aiida-pythonjob.readthedocs.io/en/latest/) to discover all the features and capabilities of AiiDA Workgraph.
+Explore the comprehensive [documentation](https://aiida-pythonjob.readthedocs.io/en/latest/) to discover all the features and capabilities of AiiDA PythonJob.
 
 
 ## License
