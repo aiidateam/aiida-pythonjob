@@ -1,5 +1,4 @@
 import inspect
-import textwrap
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union, _SpecialForm, get_type_hints
 
 from aiida.common.exceptions import NotExistent
@@ -41,57 +40,41 @@ def inspect_function(func: Callable) -> Dict[str, Any]:
     """Serialize a function for storage or transmission."""
     # we need save the source code explicitly, because in the case of jupyter notebook,
     # the source code is not saved in the pickle file
+    from aiida_pythonjob.data.pickled_data import PickledData
+
     try:
         source_code = inspect.getsource(func)
+        # Split the source into lines for processing
+        source_code_lines = source_code.split("\n")
+        source_code = "\n".join(source_code_lines)
     except OSError:
-        raise ValueError("Failed to get the source code of the function.")
+        source_code = "Failed to retrieve source code."
 
-    # Split the source into lines for processing
-    source_code_lines = source_code.split("\n")
-    function_source_code = "\n".join(source_code_lines)
-    # Find the first line of the actual function definition
-    for i, line in enumerate(source_code_lines):
-        if line.strip().startswith("def "):
-            break
-    function_source_code_without_decorator = "\n".join(source_code_lines[i:])
-    function_source_code_without_decorator = textwrap.dedent(function_source_code_without_decorator)
-    # we also need to include the necessary imports for the types used in the type hints.
-    try:
-        required_imports = get_required_imports(func)
-    except Exception as exception:
-        raise ValueError(f"Failed to get the required imports for the function: {exception}")
-    # Generate import statements
-    import_statements = "\n".join(
-        f"from {module} import {', '.join(types)}" for module, types in required_imports.items()
-    )
-    return {
-        "name": func.__name__,
-        "source_code": function_source_code,
-        "source_code_without_decorator": function_source_code_without_decorator,
-        "import_statements": import_statements,
-        "is_pickle": True,
-    }
+    return {"source_code": source_code, "mode": "use_pickled_function", "pickled_function": PickledData(value=func)}
 
 
-def build_function_data(func):
-    """Return the executor for this node."""
+def build_function_data(func: Callable) -> Dict[str, Any]:
+    """Inspect the function and return a dictionary with the function data."""
     import types
 
     if isinstance(func, (types.FunctionType, types.BuiltinFunctionType, type)):
         # Check if callable is nested (contains dots in __qualname__ after the first segment)
+        function_data = {"name": func.__name__}
         if func.__module__ == "__main__" or "." in func.__qualname__.split(".", 1)[-1]:
             # Local or nested callable, so pickle the callable
-            executor = inspect_function(func)
+            function_data.update(inspect_function(func))
         else:
             # Global callable (function/class), store its module and name for reference
-            executor = {
-                "module": func.__module__,
-                "name": func.__name__,
-                "is_pickle": False,
-            }
+            function_data.update(
+                {
+                    "mode": "use_module_path",
+                    "module_path": func.__module__,
+                    "source_code": f"from {func.__module__} import {func.__name__}",
+                }
+            )
     else:
         raise TypeError("Provided object is not a callable function or class.")
-    return executor
+    return function_data
 
 
 def get_or_create_code(

@@ -58,6 +58,14 @@ class PickledData(orm.Data):
                 "Please ensure that the correct environment and cloudpickle version are being used."
             ) from e
 
+    def get_serialized_value(self):
+        """Return the serialized value stored in the repository.
+
+        :return: The serialized value.
+        """
+        with self.base.repository.open(self.FILENAME, mode="rb") as f:
+            return f.read()
+
     def set_value(self, value):
         """Set the contents of this node by pickling the provided value.
 

@@ -19,7 +19,7 @@ def test_validate_inputs():
     with pytest.raises(ValueError, match="Only one of function or function_data should be provided"):
         prepare_pythonjob_inputs(
             function=add,
-            function_data={"module": "math", "name": "sqrt", "is_pickle": False},
+            function_data={"module_path": "math", "name": "sqrt", "is_pickle": False},
         )
 
 
@@ -53,7 +53,6 @@ def test_function_custom_outputs(fixture_localhost):
             {"name": "diff"},
         ],
     )
-    inputs.pop("process_label")
     result, node = run_get_node(PythonJob, **inputs)
 
     assert result["sum"].value == 3
@@ -295,3 +294,18 @@ def test_exit_code(fixture_localhost):
     result, node = run_get_node(PythonJob, inputs=inputs)
     assert node.exit_status == 410
     assert node.exit_message == "Some elements are negative"
+
+
+def test_local_function(fixture_localhost):
+    def multily(x, y):
+        return x * y
+
+    def add(x, y):
+        return x + multily(x, y)
+
+    inputs = prepare_pythonjob_inputs(
+        add,
+        function_inputs={"x": 2, "y": 3},
+    )
+    result, node = run_get_node(PythonJob, **inputs)
+    assert result["result"].value == 8
