@@ -66,5 +66,5 @@ def prepare_pythonjob_inputs(
         **kwargs,
     }
     if process_label:
-        inputs[process_label] = process_label
+        inputs["process_label"] = process_label
     return inputs

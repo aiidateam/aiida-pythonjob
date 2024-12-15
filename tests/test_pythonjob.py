@@ -32,11 +32,12 @@ def test_function_default_outputs(fixture_localhost):
     inputs = prepare_pythonjob_inputs(
         add,
         function_inputs={"x": 1, "y": 2},
+        process_label="add",
     )
     result, node = run_get_node(PythonJob, **inputs)
 
     assert result["result"].value == 3
-    assert node.process_label == "PythonJob<add>"
+    assert node.process_label == "add"
 
 
 def test_function_custom_outputs(fixture_localhost):
