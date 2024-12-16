@@ -8,7 +8,6 @@ def test_build_function_data():
     assert function_data == {
         "name": "sqrt",
         "mode": "use_module_path",
-        "module_path": "math",
         "source_code": "from math import sqrt",
     }
     #

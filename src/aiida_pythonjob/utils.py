@@ -68,7 +68,6 @@ def build_function_data(func: Callable) -> Dict[str, Any]:
             function_data.update(
                 {
                     "mode": "use_module_path",
-                    "module_path": func.__module__,
                     "source_code": f"from {func.__module__} import {func.__name__}",
                 }
             )
