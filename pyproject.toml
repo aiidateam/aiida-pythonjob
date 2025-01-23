@@ -52,8 +52,8 @@ Source = "https://github.com/aiidateam/aiida-pythonjob"
 "pythonjob.builtins.float" = "aiida.orm.nodes.data.float:Float"
 "pythonjob.builtins.str" = "aiida.orm.nodes.data.str:Str"
 "pythonjob.builtins.bool" = "aiida.orm.nodes.data.bool:Bool"
-"pythonjob.builtins.list"="aiida_pythonjob.data.data_with_value:List"
-"pythonjob.builtins.dict"="aiida_pythonjob.data.data_with_value:Dict"
+"pythonjob.builtins.list"="aiida.orm.nodes.data.list:List"
+"pythonjob.builtins.dict"="aiida.orm.nodes.data.dict:Dict"
 
 
 [project.entry-points."aiida.calculations"]

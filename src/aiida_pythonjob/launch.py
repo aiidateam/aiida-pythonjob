@@ -20,6 +20,8 @@ def prepare_pythonjob_inputs(
     upload_files: Dict[str, str] = {},
     process_label: Optional[str] = None,
     function_data: dict | None = None,
+    deserializers: dict | None = None,
+    serializers: dict | None = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """Prepare the inputs for PythonJob"""
@@ -55,14 +57,21 @@ def prepare_pythonjob_inputs(
         code = get_or_create_code(computer=computer, **command_info)
     # serialize the kwargs into AiiDA Data
     function_inputs = function_inputs or {}
-    function_inputs = serialize_to_aiida_nodes(function_inputs)
+    function_inputs = serialize_to_aiida_nodes(function_inputs, serializers=serializers, deserializers=deserializers)
     function_data["outputs"] = function_outputs or [{"name": "result"}]
+    # replace "." with "__dot__" in the keys of a dictionary
+    if deserializers:
+        deserializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in deserializers.items()})
+    if serializers:
+        serializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in serializers.items()})
     inputs = {
         "function_data": function_data,
         "code": code,
         "function_inputs": function_inputs,
         "upload_files": new_upload_files,
         "metadata": metadata or {},
+        "deserializers": deserializers,
+        "serializers": serializers,
         **kwargs,
     }
     if process_label:

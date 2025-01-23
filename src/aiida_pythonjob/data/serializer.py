@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import sys
 from importlib.metadata import entry_points
 from typing import Any
@@ -5,18 +7,17 @@ from typing import Any
 from aiida import common, orm
 
 from aiida_pythonjob.config import load_config
+from aiida_pythonjob.utils import import_from_path
 
+from .deserializer import all_deserializers
 from .pickled_data import PickledData
 
 
-def get_serializer_from_entry_points() -> dict:
-    """Retrieve the serializer from the entry points."""
-    # import time
+def atoms_to_structure_data(structure):
+    return orm.StructureData(ase=structure)
 
-    # ts = time.time()
-    configs = load_config()
-    serializers = configs.get("serializers", {})
-    excludes = serializers.get("excludes", [])
+
+def get_serializers_from_entry_points() -> dict:
     # Retrieve the entry points for 'aiida.data' and store them in a dictionary
     eps = entry_points()
     if sys.version_info >= (3, 10):
@@ -28,28 +29,39 @@ def get_serializer_from_entry_points() -> dict:
         # split the entry point name by first ".", and check the last part
         key = ep.name.split(".", 1)[-1]
         # skip key without "." because it is not a module name for a data type
-        if "." not in key or key in excludes:
+        if "." not in key:
             continue
         eps.setdefault(key, [])
-        eps[key].append(ep)
-
-    # check if there are duplicates
-    for key, value in eps.items():
-        if len(value) > 1:
-            if key in serializers:
-                eps[key] = [ep for ep in value if ep.name == serializers[key]]
-                if not eps[key]:
-                    raise ValueError(f"Entry point {serializers[key]} not found for {key}")
-            else:
-                msg = f"Duplicate entry points for {key}: {[ep.name for ep in value]}"
-                raise ValueError(msg)
+        # get the path of the entry point value and replace ":" with "."
+        eps[key].append(ep.value.replace(":", "."))
     return eps
 
 
-eps = get_serializer_from_entry_points()
+def get_serializers() -> dict:
+    """Retrieve the serializer from the entry points."""
+    # import time
+
+    # ts = time.time()
+    all_serializers = {}
+    configs = load_config()
+    custom_serializers = configs.get("serializers", {})
+    eps = get_serializers_from_entry_points()
+    # check if there are duplicates
+    for key, value in eps.items():
+        if len(value) > 1:
+            if key not in custom_serializers:
+                msg = f"Duplicate entry points for {key}: {value}. You can specify the one to use in the configuration file."  # noqa
+                raise ValueError(msg)
+        all_serializers[key] = value[0]
+    all_serializers.update(custom_serializers)
+    # print("Time to get serializer", time.time() - ts)
+    return all_serializers
 
 
-def serialize_to_aiida_nodes(inputs: dict) -> dict:
+all_serializers = get_serializers()
+
+
+def serialize_to_aiida_nodes(inputs: dict, serializers: dict | None = None, deserializers: dict | None = None) -> dict:
     """Serialize the inputs to a dictionary of AiiDA data nodes.
 
     Args:
@@ -61,7 +73,7 @@ def serialize_to_aiida_nodes(inputs: dict) -> dict:
     new_inputs = {}
     # save all kwargs to inputs port
     for key, data in inputs.items():
-        new_inputs[key] = general_serializer(data)
+        new_inputs[key] = general_serializer(data, serializers=serializers, deserializers=deserializers)
     return new_inputs
 
 
@@ -72,11 +84,24 @@ def clean_dict_key(data):
     return data
 
 
-def general_serializer(data: Any, check_value=True) -> orm.Node:
+def general_serializer(
+    data: Any, serializers: dict | None = None, deserializers: dict | None = None, check_value=True
+) -> orm.Node:
     """Serialize the data to an AiiDA data node."""
+    updated_deserializers = all_deserializers.copy()
+    if deserializers is not None:
+        updated_deserializers.update(deserializers)
+
+    updated_serializers = all_serializers.copy()
+    if serializers is not None:
+        updated_serializers.update(serializers)
+
     if isinstance(data, orm.Data):
         if check_value and not hasattr(data, "value"):
-            raise ValueError("Only AiiDA data Node with a value attribute is allowed.")
+            data_type = type(data)
+            ep_key = f"{data_type.__module__}.{data_type.__name__}"
+            if ep_key not in updated_deserializers:
+                raise ValueError(f"AiiDA data: {ep_key}, does not have a value attribute or deserializer.")
         return data
     elif isinstance(data, common.extendeddicts.AttributeDict):
         # if the data is an AttributeDict, use it directly
@@ -92,9 +117,10 @@ def general_serializer(data: Any, check_value=True) -> orm.Node:
         data_type = type(data)
         ep_key = f"{data_type.__module__}.{data_type.__name__}"
         # search for the key in the entry points
-        if ep_key in eps:
+        if ep_key in updated_serializers:
             try:
-                new_node = eps[ep_key][0].load()(data)
+                serializer = import_from_path(updated_serializers[ep_key])
+                new_node = serializer(data)
             except Exception as e:
                 raise ValueError(f"Error in serializing {ep_key}: {e}")
             finally:

@@ -6,11 +6,11 @@ import pathlib
 import typing as t
 
 from aiida.common.datastructures import CalcInfo, CodeInfo
-from aiida.common.extendeddicts import AttributeDict
 from aiida.common.folders import Folder
 from aiida.engine import CalcJob, CalcJobProcessSpec
 from aiida.orm import (
     Data,
+    Dict,
     FolderData,
     List,
     RemoteData,
@@ -91,6 +91,22 @@ class PythonJob(CalcJob):
             required=False,
             serializer=to_aiida_type,
             help="Additional filenames to retrieve from the remote work directory",
+        )
+        spec.input(
+            "deserializers",
+            valid_type=Dict,
+            default=None,
+            required=False,
+            serializer=to_aiida_type,
+            help="The deserializers to convert the input AiiDA data nodes to raw Python data.",
+        )
+        spec.input(
+            "serializers",
+            valid_type=Dict,
+            default=None,
+            required=False,
+            serializer=to_aiida_type,
+            help="The serializers to convert the raw Python data to AiiDA data nodes.",
         )
         spec.outputs.dynamic = True
         # set default options (optional)
@@ -190,6 +206,7 @@ class PythonJob(CalcJob):
         import cloudpickle as pickle
 
         from aiida_pythonjob.calculations.utils import generate_script_py
+        from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
 
         dirpath = pathlib.Path(folder._abspath)
 
@@ -279,17 +296,13 @@ class PythonJob(CalcJob):
 
         # Create a pickle file for the user input values
         input_values = {}
-        for key, value in inputs.items():
-            if isinstance(value, Data) and hasattr(value, "value"):
-                input_values[key] = value.value
-            elif isinstance(value, (AttributeDict, dict)):
-                # Convert an AttributeDict/dict with .value items
-                input_values[key] = {k: v.value for k, v in value.items()}
-            else:
-                raise ValueError(
-                    f"Input data {value} is not supported. Only AiiDA Data nodes with a '.value' or "
-                    "AttributeDict/dict-of-Data are allowed."
-                )
+        if "deserializers" in self.inputs and self.inputs.deserializers:
+            deserializers = self.inputs.deserializers.get_dict()
+            # replace "__dot__" with "." in the keys
+            deserializers = {k.replace("__dot__", "."): v for k, v in deserializers.items()}
+        else:
+            deserializers = None
+        input_values = deserialize_to_raw_python_data(inputs, deserializers=deserializers)
 
         filename = "inputs.pickle"
         with folder.open(filename, "wb") as handle:
