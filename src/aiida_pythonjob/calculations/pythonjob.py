@@ -6,7 +6,6 @@ import pathlib
 import typing as t
 
 from aiida.common.datastructures import CalcInfo, CodeInfo
-from aiida.common.extendeddicts import AttributeDict
 from aiida.common.folders import Folder
 from aiida.engine import CalcJob, CalcJobProcessSpec
 from aiida.orm import (
@@ -190,6 +189,7 @@ class PythonJob(CalcJob):
         import cloudpickle as pickle
 
         from aiida_pythonjob.calculations.utils import generate_script_py
+        from aiida_pythonjob.data.deserializer import general_deserializer
 
         dirpath = pathlib.Path(folder._abspath)
 
@@ -279,17 +279,7 @@ class PythonJob(CalcJob):
 
         # Create a pickle file for the user input values
         input_values = {}
-        for key, value in inputs.items():
-            if isinstance(value, Data) and hasattr(value, "value"):
-                input_values[key] = value.value
-            elif isinstance(value, (AttributeDict, dict)):
-                # Convert an AttributeDict/dict with .value items
-                input_values[key] = {k: v.value for k, v in value.items()}
-            else:
-                raise ValueError(
-                    f"Input data {value} is not supported. Only AiiDA Data nodes with a '.value' or "
-                    "AttributeDict/dict-of-Data are allowed."
-                )
+        input_values = general_deserializer(inputs)
 
         filename = "inputs.pickle"
         with folder.open(filename, "wb") as handle:

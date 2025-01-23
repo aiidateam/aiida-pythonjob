@@ -349,7 +349,7 @@ print("exit_message:", node.exit_message)
 
 
 ######################################################################
-# Define your data serializer
+# Define your data serializer and deserializer
 # --------------
 #
 # PythonJob search data serializer from the `aiida.data` entry point by the
@@ -382,7 +382,24 @@ print("exit_message:", node.exit_message)
 #
 # Save the configuration file as `pythonjob.json` in the aiida configuration
 # directory (by default, `~/.aiida` directory).
-
+#
+# If you want to pass AiiDA Data node as input, and the node does not have a `value` attribute,
+# then one must provide a deserializer for it. One can set the deserializer in the configuration file.
+#
+#
+# .. code-block:: json
+#
+#    {
+#        "serializers": {
+#            "ase.atoms.Atoms": "abc.ase.atoms.Atoms"
+#        },
+#        "deserializers": {
+#            "aiida.orm.nodes.data.structure.StructureData": "aiida_pythonjob.data.deserializer.structure_data_to_atoms"
+#        }
+#    }
+#
+# The `orm.List` and `orm.Dict` data types already have built-in deserializers.
+#
 
 ######################################################################
 # What's Next

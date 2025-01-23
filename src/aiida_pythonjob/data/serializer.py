@@ -6,6 +6,7 @@ from aiida import common, orm
 
 from aiida_pythonjob.config import load_config
 
+from .deserializer import eps_deserializers
 from .pickled_data import PickledData
 
 
@@ -46,7 +47,7 @@ def get_serializer_from_entry_points() -> dict:
     return eps
 
 
-eps = get_serializer_from_entry_points()
+eps_serializers = get_serializer_from_entry_points()
 
 
 def serialize_to_aiida_nodes(inputs: dict) -> dict:
@@ -76,7 +77,10 @@ def general_serializer(data: Any, check_value=True) -> orm.Node:
     """Serialize the data to an AiiDA data node."""
     if isinstance(data, orm.Data):
         if check_value and not hasattr(data, "value"):
-            raise ValueError("Only AiiDA data Node with a value attribute is allowed.")
+            data_type = type(data)
+            ep_key = f"{data_type.__module__}.{data_type.__name__}"
+            if ep_key not in eps_deserializers:
+                raise ValueError(f"AiiDA data: {ep_key}, does not have a value attribute or deserializer.")
         return data
     elif isinstance(data, common.extendeddicts.AttributeDict):
         # if the data is an AttributeDict, use it directly
@@ -92,9 +96,9 @@ def general_serializer(data: Any, check_value=True) -> orm.Node:
         data_type = type(data)
         ep_key = f"{data_type.__module__}.{data_type.__name__}"
         # search for the key in the entry points
-        if ep_key in eps:
+        if ep_key in eps_serializers:
             try:
-                new_node = eps[ep_key][0].load()(data)
+                new_node = eps_serializers[ep_key][0].load()(data)
             except Exception as e:
                 raise ValueError(f"Error in serializing {ep_key}: {e}")
             finally:
