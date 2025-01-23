@@ -10,6 +10,7 @@ from aiida.common.folders import Folder
 from aiida.engine import CalcJob, CalcJobProcessSpec
 from aiida.orm import (
     Data,
+    Dict,
     FolderData,
     List,
     RemoteData,
@@ -90,6 +91,13 @@ class PythonJob(CalcJob):
             required=False,
             serializer=to_aiida_type,
             help="Additional filenames to retrieve from the remote work directory",
+        )
+        spec.input(
+            "deserializers",
+            valid_type=Dict,
+            default=None,
+            required=False,
+            help="The deserializers to convert the input AiiDA data nodes to raw Python data.",
         )
         spec.outputs.dynamic = True
         # set default options (optional)
@@ -189,7 +197,7 @@ class PythonJob(CalcJob):
         import cloudpickle as pickle
 
         from aiida_pythonjob.calculations.utils import generate_script_py
-        from aiida_pythonjob.data.deserializer import general_deserializer
+        from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
 
         dirpath = pathlib.Path(folder._abspath)
 
@@ -279,7 +287,13 @@ class PythonJob(CalcJob):
 
         # Create a pickle file for the user input values
         input_values = {}
-        input_values = general_deserializer(inputs)
+        if "deserializers" in self.inputs and self.inputs.deserializers:
+            deserializers = self.inputs.deserializers.get_dict()
+            # replace "__dot__" with "." in the keys
+            deserializers = {k.replace("__dot__", "."): v for k, v in deserializers.items()}
+        else:
+            deserializers = None
+        input_values = deserialize_to_raw_python_data(inputs, deserializers=deserializers)
 
         filename = "inputs.pickle"
         with folder.open(filename, "wb") as handle:

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import sys
 from importlib.metadata import entry_points
 from typing import Any
@@ -50,7 +52,7 @@ def get_serializer_from_entry_points() -> dict:
 eps_serializers = get_serializer_from_entry_points()
 
 
-def serialize_to_aiida_nodes(inputs: dict) -> dict:
+def serialize_to_aiida_nodes(inputs: dict, deserializers: dict | None = None) -> dict:
     """Serialize the inputs to a dictionary of AiiDA data nodes.
 
     Args:
@@ -62,7 +64,7 @@ def serialize_to_aiida_nodes(inputs: dict) -> dict:
     new_inputs = {}
     # save all kwargs to inputs port
     for key, data in inputs.items():
-        new_inputs[key] = general_serializer(data)
+        new_inputs[key] = general_serializer(data, deserializers=deserializers)
     return new_inputs
 
 
@@ -73,13 +75,17 @@ def clean_dict_key(data):
     return data
 
 
-def general_serializer(data: Any, check_value=True) -> orm.Node:
+def general_serializer(data: Any, check_value=True, deserializers: dict | None = None) -> orm.Node:
     """Serialize the data to an AiiDA data node."""
+    all_deserializers = eps_deserializers.copy()
+    if deserializers is not None:
+        all_deserializers.update(deserializers)
+
     if isinstance(data, orm.Data):
         if check_value and not hasattr(data, "value"):
             data_type = type(data)
             ep_key = f"{data_type.__module__}.{data_type.__name__}"
-            if ep_key not in eps_deserializers:
+            if ep_key not in all_deserializers:
                 raise ValueError(f"AiiDA data: {ep_key}, does not have a value attribute or deserializer.")
         return data
     elif isinstance(data, common.extendeddicts.AttributeDict):

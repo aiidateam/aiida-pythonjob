@@ -58,3 +58,18 @@ def test_only_data_with_value():
         match="AiiDA data: aiida.orm.nodes.data.array.array.ArrayData, does not have a value attribute or deserializer.",  # noqa
     ):
         general_serializer(aiida.orm.ArrayData())
+
+
+def test_deserializer():
+    import numpy as np
+    from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
+
+    data = aiida.orm.ArrayData()
+    data.set_array("data", np.array([1, 2, 3]))
+    data = deserialize_to_raw_python_data(
+        data,
+        deserializers={
+            "aiida.orm.nodes.data.array.array.ArrayData": "aiida_pythonjob.data.deserializer.generate_aiida_node_deserializer"  # noqa
+        },
+    )
+    assert data == {"array|data": [3]}
