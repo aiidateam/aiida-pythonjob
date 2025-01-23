@@ -97,7 +97,16 @@ class PythonJob(CalcJob):
             valid_type=Dict,
             default=None,
             required=False,
+            serializer=to_aiida_type,
             help="The deserializers to convert the input AiiDA data nodes to raw Python data.",
+        )
+        spec.input(
+            "serializers",
+            valid_type=Dict,
+            default=None,
+            required=False,
+            serializer=to_aiida_type,
+            help="The serializers to convert the raw Python data to AiiDA data nodes.",
         )
         spec.outputs.dynamic = True
         # set default options (optional)

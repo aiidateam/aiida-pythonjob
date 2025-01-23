@@ -5,6 +5,7 @@ from typing import Any
 from aiida import common, orm
 
 from aiida_pythonjob.config import load_config
+from aiida_pythonjob.utils import import_from_path
 
 builtin_deserializers = {
     "aiida.orm.nodes.data.list.List": "aiida_pythonjob.data.deserializer.list_data_to_list",
@@ -46,27 +47,24 @@ def get_deserializer() -> dict:
     return deserializers
 
 
-eps_deserializers = get_deserializer()
+all_deserializers = get_deserializer()
 
 
 def deserialize_to_raw_python_data(data: orm.Node, deserializers: dict | None = None) -> Any:
     """Deserialize the AiiDA data node to an raw Python data."""
-    import importlib
 
-    all_deserializers = eps_deserializers.copy()
+    updated_deserializers = all_deserializers.copy()
 
     if deserializers is not None:
-        all_deserializers.update(deserializers)
+        updated_deserializers.update(deserializers)
 
     if isinstance(data, orm.Data):
         if hasattr(data, "value"):
             return getattr(data, "value")
         data_type = type(data)
         ep_key = f"{data_type.__module__}.{data_type.__name__}"
-        if ep_key in all_deserializers:
-            module_name, deserializer_name = all_deserializers[ep_key].rsplit(".", 1)
-            module = importlib.import_module(module_name)
-            deserializer = getattr(module, deserializer_name)
+        if ep_key in updated_deserializers:
+            deserializer = import_from_path(updated_deserializers[ep_key])
             return deserializer(data)
         else:
             raise ValueError(f"AiiDA data: {ep_key}, does not have a value attribute or deserializer.")

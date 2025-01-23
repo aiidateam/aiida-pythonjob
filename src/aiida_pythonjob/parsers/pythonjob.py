@@ -28,6 +28,14 @@ class PythonJobParser(Parser):
             function_outputs = [{"name": "result"}]
         self.output_list = function_outputs
 
+        # load custom serializers
+        if "serializers" in self.node.inputs and self.node.inputs.serializers:
+            serializers = self.node.inputs.serializers.get_dict()
+            # replace "__dot__" with "." in the keys
+            self.serializers = {k.replace("__dot__", "."): v for k, v in serializers.items()}
+        else:
+            self.serializers = None
+
         # If nested outputs like "add_multiply.add", keep only top-level
         top_level_output_list = [output for output in self.output_list if "." not in output["name"]]
 
@@ -144,10 +152,10 @@ class PythonJobParser(Parser):
                     if full_name_output and full_name_output.get("identifier", "Any").upper() == "NAMESPACE":
                         serialized_result[key] = self.serialize_output(value, full_name_output)
                     else:
-                        serialized_result[key] = general_serializer(value)
+                        serialized_result[key] = general_serializer(value, serializers=self.serializers)
                 return serialized_result
             else:
                 self.logger.error(f"Expected a dict for namespace '{name}', got {type(result)}.")
                 return self.exit_codes.ERROR_INVALID_OUTPUT
         else:
-            return general_serializer(result)
+            return general_serializer(result, serializers=self.serializers)

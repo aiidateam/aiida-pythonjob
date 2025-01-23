@@ -376,7 +376,7 @@ print("exit_message:", node.exit_message)
 #
 #    {
 #        "serializers": {
-#            "ase.atoms.Atoms": "abc.ase.atoms.Atoms"
+#            "ase.atoms.Atoms": "abc.ase.atoms.AtomsData" # use the full path to the serializer
 #        }
 #    }
 #
