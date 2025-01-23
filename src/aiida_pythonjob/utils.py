@@ -7,6 +7,17 @@ from aiida.orm import Computer, InstalledCode, User, load_code, load_computer
 CONDA_DEFAULT_PATH = "$HOME/miniforge3/"
 
 
+def import_from_path(path: str) -> Any:
+    import importlib
+
+    module_name, object_name = path.rsplit(".", 1)
+    module = importlib.import_module(module_name)
+    try:
+        return getattr(module, object_name)
+    except AttributeError:
+        raise AttributeError(f"{object_name} not found in module {module_name}.")
+
+
 def get_required_imports(func: Callable) -> Dict[str, set]:
     """Retrieve type hints and the corresponding modules."""
     type_hints = get_type_hints(func)

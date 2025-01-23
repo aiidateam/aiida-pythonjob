@@ -1,4 +1,5 @@
 import aiida
+import pytest
 
 
 def test_typing():
@@ -36,15 +37,6 @@ def test_python_job():
     assert isinstance(new_inputs["c"], PickledData)
 
 
-def test_dict_list():
-    from aiida_pythonjob.data.data_with_value import Dict, List
-
-    data = List([1, 2, 3])
-    assert data.value == [1, 2, 3]
-    data = Dict({"a": 1, "b": 2})
-    assert data.value == {"a": 1, "b": 2}
-
-
 def test_atoms_data():
     from aiida_pythonjob.data.atoms import AtomsData
     from ase.build import bulk
@@ -58,7 +50,26 @@ def test_atoms_data():
 def test_only_data_with_value():
     from aiida_pythonjob.data import general_serializer
 
-    try:
-        general_serializer(aiida.orm.List([1]))
-    except ValueError as e:
-        assert str(e) == "Only AiiDA data Node with a value attribute is allowed."
+    # do not raise error because the built-in serializer can handle it
+    general_serializer(aiida.orm.List([1]))
+    # Test case: aiida.orm.ArrayData should raise a ValueError
+    with pytest.raises(
+        ValueError,
+        match="AiiDA data: aiida.orm.nodes.data.array.array.ArrayData, does not have a value attribute or deserializer.",  # noqa
+    ):
+        general_serializer(aiida.orm.ArrayData())
+
+
+def test_deserializer():
+    import numpy as np
+    from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
+
+    data = aiida.orm.ArrayData()
+    data.set_array("data", np.array([1, 2, 3]))
+    data = deserialize_to_raw_python_data(
+        data,
+        deserializers={
+            "aiida.orm.nodes.data.array.array.ArrayData": "aiida_pythonjob.data.deserializer.generate_aiida_node_deserializer"  # noqa
+        },
+    )
+    assert data == {"array|data": [3]}
