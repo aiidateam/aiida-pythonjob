@@ -49,7 +49,7 @@ How to guides
 #     from aiida_pythonjob.utils import create_conda_env
 #     # create a conda environment on remote computer
 #     create_conda_env(
-#            "merlin6",                # Remote computer
+#            "merlin6",                # Remote computer, already stored in the AiiDA database
 #            "test_pythonjob",         # Name of the conda environment
 #            modules=["anaconda"],     # Modules to load (e.g., Anaconda)
 #            pip=["numpy", "matplotlib"],  # Python packages to install via pip
@@ -59,6 +59,33 @@ How to guides
 #            }
 #        )
 #
+#
+# If you don't have conda installed on the remote computer, or you can use Anaconda for license reasons,
+# you can run the `create_conda_env` function
+# with the `install_conda` parameter set to `True`. This will install conda on the remote computer via the
+# miniforge installer. You can find more information about Miniforge and download the installer from the
+# official [Miniforge GitHub repository](https://github.com/conda-forge/miniforge). The `conda` dictionary
+# can be used to specify the desired conda environment path, adding a new key "path": "/path/to/conda"`.,
+# e.g.:
+#
+# .. code-block:: python
+#
+#     from aiida_pythonjob.utils import create_conda_env
+#     # create a conda environment on remote computer
+#     create_conda_env(
+#            "merlin6",                # Remote computer, already stored in the AiiDA database
+#            "test_pythonjob",         # Name of the conda environment
+#            modules=["anaconda"],     # Modules to load (e.g., Anaconda)
+#            pip=["numpy", "matplotlib"],  # Python packages to install via pip
+#            conda={                   # Conda-specific settings
+#                "channels": ["conda-forge"],  # Channels to use
+#                "dependencies": ["qe"]       # Conda packages to install
+#                "path": "$HOME/miniforge3/" # path to the (new) conda installation
+#           },
+#        )
+#
+#
+# By default, the conda path will be set to `$HOME/miniforge3/`, if the `path` key is not provided.
 #
 
 ######################################################################
