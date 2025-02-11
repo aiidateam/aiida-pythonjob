@@ -347,6 +347,33 @@ result, node = run_get_node(PythonJob, inputs=inputs)
 print("exit_status:", node.exit_status)
 print("exit_message:", node.exit_message)
 
+######################################################################
+# Using `register_pickle_by_value`
+# --------------------------------
+#
+# If the function is defined inside an external module that is **not installed** on
+# the remote computer, this can cause import errors during execution.
+#
+# **Solution:**
+# By enabling `register_pickle_by_value=True`, the function is serialized **by value**
+# instead of being referenced by its module path. This embeds the function unpickled
+# even if the original module is unavailable on the remote computer.
+#
+# **Example:**
+#
+# .. code-block:: python
+#
+#     inputs = prepare_pythonjob_inputs(
+#         my_function,
+#         function_inputs={"x": 1, "y": 2},
+#         computer="localhost",
+#         register_pickle_by_value=True,  # Ensures function is embedded
+#     )
+#
+# **Important Considerations:**: If the function **contains import statements**,
+# the imported modules **must still be installed** on the remote computer.
+#
+
 
 ######################################################################
 # Define your data serializer and deserializer

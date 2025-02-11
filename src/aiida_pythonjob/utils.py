@@ -1,3 +1,4 @@
+import importlib
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union, _SpecialForm, get_type_hints
 
@@ -6,8 +7,6 @@ from aiida.orm import Computer, InstalledCode, User, load_code, load_computer
 
 
 def import_from_path(path: str) -> Any:
-    import importlib
-
     module_name, object_name = path.rsplit(".", 1)
     module = importlib.import_module(module_name)
     try:
@@ -47,24 +46,39 @@ def get_required_imports(func: Callable) -> Dict[str, set]:
     return imports
 
 
-def inspect_function(func: Callable) -> Dict[str, Any]:
+def inspect_function(
+    func: Callable, inspect_source: bool = False, register_pickle_by_value: bool = False
+) -> Dict[str, Any]:
     """Serialize a function for storage or transmission."""
     # we need save the source code explicitly, because in the case of jupyter notebook,
     # the source code is not saved in the pickle file
+    import cloudpickle
+
     from aiida_pythonjob.data.pickled_data import PickledData
 
-    try:
-        source_code = inspect.getsource(func)
-        # Split the source into lines for processing
-        source_code_lines = source_code.split("\n")
-        source_code = "\n".join(source_code_lines)
-    except OSError:
-        source_code = "Failed to retrieve source code."
+    if inspect_source:
+        try:
+            source_code = inspect.getsource(func)
+            # Split the source into lines for processing
+            source_code_lines = source_code.split("\n")
+            source_code = "\n".join(source_code_lines)
+        except OSError:
+            source_code = "Failed to retrieve source code."
+    else:
+        source_code = ""
 
-    return {"source_code": source_code, "mode": "use_pickled_function", "pickled_function": PickledData(value=func)}
+    if register_pickle_by_value:
+        module = importlib.import_module(func.__module__)
+        cloudpickle.register_pickle_by_value(module)
+        pickled_function = PickledData(value=func)
+        cloudpickle.unregister_pickle_by_value(module)
+    else:
+        pickled_function = PickledData(value=func)
+
+    return {"source_code": source_code, "mode": "use_pickled_function", "pickled_function": pickled_function}
 
 
-def build_function_data(func: Callable) -> Dict[str, Any]:
+def build_function_data(func: Callable, register_pickle_by_value: bool = False) -> Dict[str, Any]:
     """Inspect the function and return a dictionary with the function data."""
     import types
 
@@ -73,15 +87,10 @@ def build_function_data(func: Callable) -> Dict[str, Any]:
         function_data = {"name": func.__name__}
         if func.__module__ == "__main__" or "." in func.__qualname__.split(".", 1)[-1]:
             # Local or nested callable, so pickle the callable
-            function_data.update(inspect_function(func))
+            function_data.update(inspect_function(func, inspect_source=True))
         else:
             # Global callable (function/class), store its module and name for reference
-            function_data.update(
-                {
-                    "mode": "use_module_path",
-                    "source_code": f"from {func.__module__} import {func.__name__}",
-                }
-            )
+            function_data.update(inspect_function(func, register_pickle_by_value=register_pickle_by_value))
     else:
         raise TypeError("Provided object is not a callable function or class.")
     return function_data
