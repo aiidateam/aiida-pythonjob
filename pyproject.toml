@@ -28,6 +28,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+dev = [
+  "hatch",
+]
 pre-commit = [
   'pre-commit~=3.5',
 ]

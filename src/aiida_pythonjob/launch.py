@@ -22,6 +22,7 @@ def prepare_pythonjob_inputs(
     function_data: dict | None = None,
     deserializers: dict | None = None,
     serializers: dict | None = None,
+    register_pickle_by_value: bool = False,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """Prepare the inputs for PythonJob"""
@@ -33,7 +34,7 @@ def prepare_pythonjob_inputs(
         raise ValueError("Only one of function or function_data should be provided")
     # if function is a function, inspect it and get the source code
     if function is not None and inspect.isfunction(function):
-        function_data = build_function_data(function)
+        function_data = build_function_data(function, register_pickle_by_value=register_pickle_by_value)
     new_upload_files = {}
     # change the string in the upload files to SingleFileData, or FolderData
     for key, source in upload_files.items():
