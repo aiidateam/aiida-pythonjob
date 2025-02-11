@@ -1,6 +1,6 @@
 """AiiDA plugin that run Python function on remote computers."""
 
-__version__ = "0.1.7"
+__version__ = "0.1.8"
 
 from .calculations import PythonJob
 from .launch import prepare_pythonjob_inputs
