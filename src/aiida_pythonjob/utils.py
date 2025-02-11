@@ -5,6 +5,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union, _SpecialFo
 from aiida.common.exceptions import NotExistent
 from aiida.orm import Computer, InstalledCode, User, load_code, load_computer
 
+CONDA_DEFAULT_PATH = "$HOME/miniforge3/"
+
 
 def import_from_path(path: str) -> Any:
     module_name, object_name = path.rsplit(".", 1)
@@ -123,10 +125,88 @@ def get_or_create_code(
         return code
 
 
+def generate_bash_to_install_conda(
+    shell: str = "posix",
+    destination: str = CONDA_DEFAULT_PATH,
+    modules: Optional[list] = None,
+):
+    """
+    Args:
+        shell (str): The type of shell to initialize conda for (default is "posix").
+        destination (str): The installation directory for Miniforge (default is CONDA_DEFAULT_PATH).
+        modules (list): A list of system modules to load before running the script (default is None).
+    Returns:
+        str: A bash script as a string to install Miniforge and set up conda.
+
+    Generates a bash script to install conda via miniforge on a local/remote computer.
+    The default channel (the only one) is automatically set to be conda-forge, avoiding then to
+    use Anaconda channels, restricted by the license.
+    We anyway perform a check to be sure that the installation will not use Anaconda channels.
+    If python_version is None, it uses the Python version from the local environment.
+    """
+
+    # Start of the script
+    script = "#!/bin/bash\n\n"
+
+    # Load modules if provided
+    if modules:
+        script += "# Load specified system modules\n"
+        for module in modules:
+            script += f"module load {module}\n"
+
+    script += f"""
+# Check if conda is already installed
+if command -v {destination}/bin/conda &> /dev/null; then
+    echo "Conda is already installed. Skipping installation."
+else\n
+"""
+
+    # Getting minimum Miniforge installer as recommended here: https://github.com/conda-forge/miniforge?tab=readme-ov-file
+    script += "# Downloading Miniforge installer\n"
+    script += "curl -L -O \
+        https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh\n"
+
+    # Running the installer
+    script += "# Running the Miniforge installer\n"
+    script += f"bash Miniforge3-$(uname)-$(uname -m).sh -b -p {destination}\n"
+
+    # Conda shell hook initialization for proper conda activation
+    script += "# Initialize Conda for this shell\n"
+    script += f'eval "$({destination}/bin/conda shell.{shell} hook)"\n'
+
+    # Ensure the default Anaconda channel is not present in the conda configuration
+    script += """
+# Check if 'conda config --show channels | grep default' returns anything
+if conda config --show channels | grep -q "defaults"; then
+    echo "The default Anaconda channel is present in the conda configuration. We remove it."
+    conda config --remove channels defaults
+else
+    echo "The default Anaconda channel is not present in the conda configuration. Good."
+fi
+"""
+
+    # Ensure the conda-forge channel is present in the conda configuration
+    script += """
+# Ensure conda-forge is there
+if conda config --show channels | grep -q "conda-forge"; then
+    echo "The conda-forge channel is present in the conda configuration. Good."
+else
+    echo "The conda-forge channel is not present in the conda configuration. We add it."
+    conda config --append channels conda-forge
+fi
+"""
+
+    script += "fi\n"
+    # End of the script
+    script += 'echo "Miniforge-based conda installation is complete."\n\n'
+
+    return script
+
+
 def generate_bash_to_create_python_env(
     name: str,
     pip: Optional[List[str]] = None,
-    conda: Optional[Dict[str, list]] = None,
+    conda: Optional[Dict[str, list]] = {},
     modules: Optional[List[str]] = None,
     python_version: Optional[str] = None,
     variables: Optional[Dict[str, str]] = None,
@@ -135,13 +215,15 @@ def generate_bash_to_create_python_env(
     """
     Generates a bash script for creating or updating a Python environment on a remote computer.
     If python_version is None, it uses the Python version from the local environment.
-    Conda is a dictionary that can include 'channels' and 'dependencies'.
+    Conda is a dictionary that can include 'channels' and 'dependencies' and 'path', where 'path' is the path to the
+    conda executable (not included in the path), and is needed only to activate the environment.
     """
     import sys
 
     pip = pip or []
     conda_channels = conda.get("channels", []) if conda else []
     conda_dependencies = conda.get("dependencies", []) if conda else []
+    conda_path = conda.get("path", CONDA_DEFAULT_PATH)
     # Determine the Python version from the local environment if not provided
     local_python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
     desired_python_version = python_version if python_version is not None else local_python_version
@@ -157,7 +239,7 @@ def generate_bash_to_create_python_env(
 
     # Conda shell hook initialization for proper conda activation
     script += "# Initialize Conda for this shell\n"
-    script += f'eval "$(conda shell.{shell} hook)"\n'
+    script += f'eval "$({conda_path}/bin/conda shell.{shell} hook)"\n'
 
     script += "# Setup the Python environment\n"
     script += "if ! conda info --envs | grep -q ^{name}$; then\n"
@@ -197,13 +279,34 @@ def create_conda_env(
     computer: Union[str, Computer],
     name: str,
     pip: Optional[List[str]] = None,
-    conda: Optional[List[str]] = None,
+    conda: Optional[Dict[str, list]] = {},
     modules: Optional[List[str]] = None,
     python_version: Optional[str] = None,
     variables: Optional[Dict[str, str]] = None,
     shell: str = "posix",
+    install_conda: bool = False,
 ) -> Tuple[bool, str]:
-    """Test that there is no unexpected output from the connection."""
+    """
+
+    Create a conda environment on a remote computer.
+
+    Parameters:
+    - computer (Union[str, Computer]): The computer on which to create the environment.
+        Can be a string (computer label) or a Computer object.
+    - name (str): The name of the conda environment to create.
+    - pip (Optional[List[str]]): List of pip packages to install in the environment.
+    - conda (Optional[List[str]]): List of conda packages to install in the environment. See the
+        `generate_bash_to_create_python_env` function for details.
+    - modules (Optional[List[str]]): List of modules to load before creating the environment.
+    - python_version (Optional[str]): The Python version to use for the environment.
+    - variables (Optional[Dict[str, str]]): Environment variables to set during the environment creation.
+    - shell (str): The shell type to use (default is "posix").
+    - install_conda (bool): Whether to install conda if it is not already installed (default is False).
+
+    Returns:
+    - Tuple[bool, str]: A tuple containing a boolean indicating success or failure, and a string message with details.
+
+    Test that there is no unexpected output from the connection."""
     # Execute a command that should not return any error, except ``NotImplementedError``
     # since not all transport plugins implement remote command execution.
     from aiida.common.exceptions import NotExistent
@@ -220,6 +323,13 @@ def create_conda_env(
     transport = authinfo.get_transport()
 
     script = generate_bash_to_create_python_env(name, pip, conda, modules, python_version, variables, shell)
+
+    conda_path = conda.get("path", CONDA_DEFAULT_PATH)
+
+    if install_conda:
+        install_conda_script = generate_bash_to_install_conda(shell, destination=conda_path, modules=modules)
+        script = install_conda_script + script
+
     with transport:
         scheduler.set_transport(transport)
         try:
