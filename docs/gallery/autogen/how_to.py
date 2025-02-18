@@ -241,14 +241,12 @@ print("retrieved files: ", result["retrieved"].list_object_names())
 # is a dictionary with keys and values returned by a function. Each value in
 # this dictionary will be serialized to AiiDA data, and the key-value pair
 # will be stored in the database.
+#
 # Why Use Namespace Outputs?
 #
-# - **Dynamic and Flexible**: The keys and values in the namespace output are
-# not fixed and can change based on the task's execution.
-# - **Querying**: The data in the namespace output is stored as an AiiDA data
-# node, allowing for easy querying and retrieval.
-# - **Data Provenance**: When the data is used as input for subsequent tasks,
-# the origin of data is tracked.
+# - **Dynamic and Flexible**: The keys and values in the namespace output are not fixed and can change based on the task's execution. # noqa
+# - **Querying**: The data in the namespace output is stored as an AiiDA data node, allowing for easy querying and retrieval. # noqa
+# - **Data Provenance**: When the data is used as input for subsequent tasks, the origin of data is tracked.
 #
 # For example: Consider a molecule adsorption calculation where the namespace
 # output stores the surface slabs of the molecule adsorbed on different surface
@@ -332,7 +330,7 @@ for key, value in result["scaled_structures"].items():
 
 def add(x, y):
     sum = x + y
-    if (sum < 0).any():
+    if sum < 0:
         exit_code = {"status": 410, "message": "Some elements are negative"}
         return {"sum": sum, "exit_code": exit_code}
     return {"sum": sum}
