@@ -24,7 +24,6 @@ dependencies = [
     "aiida-core>=2.3,<3",
     "ase",
     "cloudpickle",
-    "voluptuous"
 ]
 
 [project.optional-dependencies]
