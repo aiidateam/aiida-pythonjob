@@ -50,12 +50,12 @@ def inspect_function(
     func: Callable, inspect_source: bool = False, register_pickle_by_value: bool = False
 ) -> Dict[str, Any]:
     """Serialize a function for storage or transmission."""
-    # we need save the source code explicitly, because in the case of jupyter notebook,
-    # the source code is not saved in the pickle file
+    import base64
+
     import cloudpickle
 
-    from aiida_pythonjob.data.pickled_data import PickledData
-
+    # we need save the source code explicitly, because in the case of jupyter notebook,
+    # the source code is not saved in the pickle file
     if inspect_source:
         try:
             source_code = inspect.getsource(func)
@@ -70,12 +70,14 @@ def inspect_function(
     if register_pickle_by_value:
         module = importlib.import_module(func.__module__)
         cloudpickle.register_pickle_by_value(module)
-        pickled_function = PickledData(value=func)
+        pickled_function = cloudpickle.dumps(func)
         cloudpickle.unregister_pickle_by_value(module)
     else:
-        pickled_function = PickledData(value=func)
+        pickled_function = cloudpickle.dumps(func)
 
-    return {"source_code": source_code, "mode": "use_pickled_function", "pickled_function": pickled_function}
+    pickled_function = base64.b64encode(pickled_function).decode("utf-8")
+
+    return {"source_code": source_code, "mode": "pickled_callable", "pickled_function": pickled_function}
 
 
 def build_function_data(func: Callable, register_pickle_by_value: bool = False) -> Dict[str, Any]:
@@ -84,7 +86,7 @@ def build_function_data(func: Callable, register_pickle_by_value: bool = False) 
 
     if isinstance(func, (types.FunctionType, types.BuiltinFunctionType, type)):
         # Check if callable is nested (contains dots in __qualname__ after the first segment)
-        function_data = {"name": func.__name__}
+        function_data = {"callable_name": func.__name__}
         if func.__module__ == "__main__" or "." in func.__qualname__.split(".", 1)[-1]:
             # Local or nested callable, so pickle the callable
             function_data.update(inspect_function(func, inspect_source=True))

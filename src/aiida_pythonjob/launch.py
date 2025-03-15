@@ -26,7 +26,7 @@ def prepare_pythonjob_inputs(
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """Prepare the inputs for PythonJob"""
-    from .data.serializer import serialize_to_aiida_nodes
+    from aiida_pythonjob.data.serializer import serialize_to_aiida_nodes
 
     if function is None and function_data is None:
         raise ValueError("Either function or function_data must be provided")

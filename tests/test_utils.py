@@ -32,7 +32,7 @@ def test_build_function_data():
     function_data = build_function_data(local_function)
     assert function_data["name"] == "local_function"
     assert "source_code" in function_data
-    assert function_data["mode"] == "use_pickled_function"
+    assert function_data["mode"] == "pickled_callable"
 
     def outer_function():
         def nested_function(x, y):
@@ -43,4 +43,4 @@ def test_build_function_data():
     nested_func = outer_function()
     function_data = build_function_data(nested_func)
     assert function_data["name"] == "nested_function"
-    assert function_data["mode"] == "use_pickled_function"
+    assert function_data["mode"] == "pickled_callable"

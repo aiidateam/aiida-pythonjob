@@ -19,6 +19,8 @@ from aiida.orm import (
     to_aiida_type,
 )
 
+from aiida_pythonjob.data import PythonJobNode
+
 __all__ = ("PythonJob",)
 
 
@@ -29,6 +31,8 @@ class PythonJob(CalcJob):
     1) Loading a pickled function object (function_data.pickled_function).
     2) Embedding raw source code for the function (function_data.source_code).
     """
+
+    _node_class = PythonJobNode
 
     _internal_retrieve_list = []
     _retrieve_singlefile_list = []
@@ -42,12 +46,7 @@ class PythonJob(CalcJob):
     def define(cls, spec: CalcJobProcessSpec) -> None:  # type: ignore[override]
         """Define the process specification, including its inputs, outputs and known exit codes."""
         super().define(spec)
-        spec.input_namespace("function_data")
-        spec.input("function_data.name", valid_type=Str, serializer=to_aiida_type)
-        spec.input("function_data.source_code", valid_type=Str, serializer=to_aiida_type, required=False)
-        spec.input("function_data.outputs", valid_type=List, serializer=to_aiida_type, required=False)
-        spec.input("function_data.pickled_function", valid_type=Data, required=False)
-        spec.input("function_data.mode", valid_type=Str, serializer=to_aiida_type, required=False)
+        spec.input("function_data", valid_type=Dict, serializer=to_aiida_type)
         spec.input("process_label", valid_type=Str, serializer=to_aiida_type, required=False)
         spec.input_namespace("function_inputs", valid_type=Data, required=False)
         spec.input(
@@ -174,15 +173,7 @@ class PythonJob(CalcJob):
 
     def get_function_name(self) -> str:
         """Return the name of the function to run."""
-        if "name" in self.inputs.function_data:
-            name = self.inputs.function_data.name.value
-        else:
-            try:
-                name = self.inputs.function_data.pickled_function.value.__name__
-            except AttributeError:
-                # If a user doesn't specify name, fallback to something generic
-                name = "anonymous_function"
-        return name
+        return self.inputs.function_data.get_dict().get("callable_name", "anonymous_function")
 
     def _build_process_label(self) -> str:
         """Use the function name or an explicit label as the process label."""
@@ -223,19 +214,16 @@ class PythonJob(CalcJob):
         else:
             parent_folder_name = self._DEFAULT_PARENT_FOLDER_NAME
 
-        function_data = self.inputs.function_data
+        function_data = self.inputs.function_data.get_dict()
 
         # Build the Python script
         source_code = function_data.get("source_code")
-        if "pickled_function" in self.inputs.function_data:
-            pickled_function = self.inputs.function_data.pickled_function.get_serialized_value()
-        else:
-            pickled_function = None
+        pickled_function = function_data.get("pickled_function")
         # Generate script.py content
         function_name = self.get_function_name()  # or some user-defined name
         script_content = generate_script_py(
             pickled_function=pickled_function,
-            source_code=source_code.value if source_code else None,
+            source_code=source_code,
             function_name=function_name,
         )
 
@@ -312,7 +300,7 @@ class PythonJob(CalcJob):
         if pickled_function:
             # create a SinglefileData object for the pickled function
             function_pkl_fname = "function.pkl"
-            with folder.open(function_pkl_fname, "wb") as handle:
+            with folder.open(function_pkl_fname, "w") as handle:
                 handle.write(pickled_function)
 
         # create a singlefiledata object for the pickled data

@@ -22,10 +22,7 @@ class PythonJobParser(Parser):
         import pickle
 
         # Read function_outputs specification
-        if "outputs" in self.node.inputs.function_data:
-            function_outputs = self.node.inputs.function_data.outputs.get_list()
-        else:
-            function_outputs = [{"name": "result"}]
+        function_outputs = self.node.inputs.function_data.get_dict().get("function_data", [{"name": "result"}])
         self.output_list = function_outputs
 
         # load custom serializers

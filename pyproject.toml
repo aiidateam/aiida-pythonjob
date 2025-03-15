@@ -48,6 +48,7 @@ docs = [
 Source = "https://github.com/aiidateam/aiida-pythonjob"
 
 [project.entry-points."aiida.data"]
+"pythonjob.pythonjob" = "aiida_pythonjob.data.pythonjob:PythonJobNode"
 "pythonjob.pickled_data" = "aiida_pythonjob.data.pickled_data:PickledData"
 "pythonjob.ase.atoms.Atoms" = "aiida_pythonjob.data.atoms:AtomsData"
 "pythonjob.builtins.int" = "aiida.orm.nodes.data.int:Int"
