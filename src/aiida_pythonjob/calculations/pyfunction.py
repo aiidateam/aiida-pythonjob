@@ -140,6 +140,21 @@ class PyFunction(Process):
         args = []
         kwargs: dict[str, Data] = {}
         inputs = dict(self.inputs.function_inputs or {})
+        inputs.pop("serializers", None)
+        inputs.pop("deserializers", None)
+        # load custom serializers
+        if "serializers" in self.node.inputs and self.node.inputs.serializers:
+            serializers = self.node.inputs.serializers.get_dict()
+            # replace "__dot__" with "." in the keys
+            self.serializers = {k.replace("__dot__", "."): v for k, v in serializers.items()}
+        else:
+            self.serializers = None
+        if "deserializers" in self.node.inputs and self.node.inputs.deserializers:
+            deserializers = self.node.inputs.deserializers.get_dict()
+            # replace "__dot__" with "." in the keys
+            self.deserializers = {k.replace("__dot__", "."): v for k, v in deserializers.items()}
+        else:
+            self.deserializers = None
 
         for name, parameter in inspect.signature(self.func).parameters.items():
             if parameter.kind in [parameter.POSITIONAL_ONLY, parameter.POSITIONAL_OR_KEYWORD]:
@@ -156,8 +171,8 @@ class PyFunction(Process):
 
         # The remaining inputs have to be keyword arguments.
         kwargs.update(**inputs)
-        raw_args = [deserialize_to_raw_python_data(x) for x in args]
-        raw_kwargs = {k: deserialize_to_raw_python_data(v) for k, v in kwargs.items()}
+        raw_args = [deserialize_to_raw_python_data(x, deserializers=self.deserializers) for x in args]
+        raw_kwargs = {k: deserialize_to_raw_python_data(v, deserializers=self.deserializers) for k, v in kwargs.items()}
 
         results = self.func(*raw_args, **raw_kwargs)
 
@@ -167,13 +182,6 @@ class PyFunction(Process):
         else:
             function_outputs = [{"name": "result"}]
         self.output_list = function_outputs
-        # load custom serializers
-        if "serializers" in self.node.inputs and self.node.inputs.serializers:
-            serializers = self.node.inputs.serializers.get_dict()
-            # replace "__dot__" with "." in the keys
-            self.serializers = {k.replace("__dot__", "."): v for k, v in serializers.items()}
-        else:
-            self.serializers = None
 
         # If nested outputs like "add_multiply.add", keep only top-level
         top_level_output_list = [output for output in self.output_list if "." not in output["name"]]
