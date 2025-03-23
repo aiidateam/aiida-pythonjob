@@ -78,3 +78,71 @@ def prepare_pythonjob_inputs(
     if process_label:
         inputs["process_label"] = process_label
     return inputs
+
+
+def create_inputs(func, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Create the input dictionary for the ``FunctionProcess``."""
+    # The complete input dictionary consists of the keyword arguments...
+    inputs = dict(kwargs or {})
+    arguments = list(args)
+    for name, parameter in inspect.signature(func).parameters.items():
+        if parameter.kind in [parameter.POSITIONAL_ONLY, parameter.POSITIONAL_OR_KEYWORD]:
+            try:
+                inputs[name] = arguments.pop(0)
+            except IndexError:
+                pass
+        elif parameter.kind is parameter.VAR_POSITIONAL:
+            raise NotImplementedError("Variable positional arguments are not yet supported")
+
+    return inputs
+
+
+def prepare_pyfunction_inputs(
+    function: Optional[Callable[..., Any]] = None,
+    function_inputs: Optional[Dict[str, Any]] = None,
+    function_outputs: Optional[List[str | dict]] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+    process_label: Optional[str] = None,
+    function_data: dict | None = None,
+    deserializers: dict | None = None,
+    serializers: dict | None = None,
+    register_pickle_by_value: bool = False,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """Prepare the inputs for PythonJob"""
+    import types
+
+    from .data.serializer import serialize_to_aiida_nodes
+
+    if function is None and function_data is None:
+        raise ValueError("Either function or function_data must be provided")
+    if function is not None and function_data is not None:
+        raise ValueError("Only one of function or function_data should be provided")
+    # if function is a function, inspect it and get the source code
+    if function is not None:
+        if inspect.isfunction(function):
+            function_data = build_function_data(function, register_pickle_by_value=register_pickle_by_value)
+        elif isinstance(function, types.BuiltinFunctionType):
+            raise NotImplementedError("Built-in functions are not supported yet")
+        else:
+            raise ValueError("Invalid function type")
+    # serialize the kwargs into AiiDA Data
+    function_inputs = function_inputs or {}
+    function_inputs = serialize_to_aiida_nodes(function_inputs, serializers=serializers, deserializers=deserializers)
+    function_data["outputs"] = function_outputs or [{"name": "result"}]
+    # replace "." with "__dot__" in the keys of a dictionary
+    if deserializers:
+        deserializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in deserializers.items()})
+    if serializers:
+        serializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in serializers.items()})
+    inputs = {
+        "function_data": function_data,
+        "function_inputs": function_inputs,
+        "metadata": metadata or {},
+        "deserializers": deserializers,
+        "serializers": serializers,
+        **kwargs,
+    }
+    if process_label:
+        inputs["process_label"] = process_label
+    return inputs

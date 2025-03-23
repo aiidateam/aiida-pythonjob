@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import traceback
 from importlib.metadata import entry_points
 from typing import Any
 
@@ -85,7 +86,11 @@ def clean_dict_key(data):
 
 
 def general_serializer(
-    data: Any, serializers: dict | None = None, deserializers: dict | None = None, check_value=True
+    data: Any,
+    serializers: dict | None = None,
+    deserializers: dict | None = None,
+    check_value=True,
+    store=True,
 ) -> orm.Node:
     """Serialize the data to an AiiDA data node."""
     updated_deserializers = all_deserializers.copy()
@@ -121,20 +126,18 @@ def general_serializer(
             try:
                 serializer = import_from_path(updated_serializers[ep_key])
                 new_node = serializer(data)
-            except Exception as e:
-                raise ValueError(f"Error in serializing {ep_key}: {e}")
-            finally:
-                # try to save the node to da
-                try:
+                if store:
                     new_node.store()
-                    return new_node
-                except Exception:
-                    raise ValueError(f"Error in storing data {ep_key}")
+                return new_node
+            except Exception:
+                error_traceback = traceback.format_exc()
+                raise ValueError(f"Error in serializing {ep_key}: {error_traceback}")
         else:
             # try to serialize the data as a PickledData
             try:
                 new_node = PickledData(data)
-                new_node.store()
+                if store:
+                    new_node.store()
                 return new_node
             except Exception as e:
                 raise ValueError(f"Error in serializing {ep_key}: {e}")
