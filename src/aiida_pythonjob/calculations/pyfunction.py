@@ -122,7 +122,7 @@ class PyFunction(Process):
         return result
 
     @override
-    async def run(self) -> ExitCode | None:
+    def run(self) -> ExitCode | None:
         """Run the process."""
 
         from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
