@@ -59,7 +59,10 @@ def pyfunction(
             manager = get_manager()
             runner = manager.get_runner()
             inputs = create_inputs(function, *args, **kwargs)
-            inputs = prepare_pyfunction_inputs(function=function, function_inputs=inputs, function_outputs=outputs)
+            function_outputs = inputs.pop("function_outputs", {}) or outputs
+            inputs = prepare_pyfunction_inputs(
+                function=function, function_inputs=inputs, function_outputs=function_outputs
+            )
 
             # # Remove all the known inputs from the kwargs
             # for port in process_class.spec().inputs:
