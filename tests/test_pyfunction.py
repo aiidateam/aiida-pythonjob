@@ -1,3 +1,4 @@
+from aiida import orm
 from aiida.engine import run_get_node
 from aiida_pythonjob import pyfunction
 
@@ -118,3 +119,15 @@ def test_override_outputs():
     assert result["add_multiply"]["add"]["order1"].value == 3
     assert result["add_multiply"]["add"]["order2"].value == 5
     assert result["add_multiply"]["multiply"].value == 2
+
+
+def test_aiida_node_as_inputs_outputs():
+    """Test function with AiiDA nodes as inputs and outputs."""
+
+    @pyfunction()
+    def add(x, y):
+        return {"sum": orm.Int(x + y), "diff": orm.Int(x - y)}
+
+    result, node = run_get_node(add, x=orm.Int(1), y=orm.Int(2))
+    assert set(result.keys()) == {"sum", "diff"}
+    assert result["sum"].value == 3
