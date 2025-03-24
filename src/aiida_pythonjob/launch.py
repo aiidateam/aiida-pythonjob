@@ -129,7 +129,16 @@ def prepare_pyfunction_inputs(
     # serialize the kwargs into AiiDA Data
     function_inputs = function_inputs or {}
     function_inputs = serialize_to_aiida_nodes(function_inputs, serializers=serializers, deserializers=deserializers)
-    function_data["outputs"] = function_outputs or [{"name": "result"}]
+    function_data["outputs"] = []
+    function_outputs = function_outputs or [{"name": "result"}]
+    # if the output is WORKGRAPH.NAMESPACE, we need to change it to NAMESPACE
+    for output in function_outputs:
+        formated_output = {"name": output} if isinstance(output, str) else output
+        identifier = formated_output.get("identifier", "any")
+        if identifier.split(".")[-1].upper() == "NAMESPACE":
+            function_data["outputs"].append({"name": formated_output["name"], "identifier": "NAMESPACE"})
+        else:
+            function_data["outputs"].append({"name": formated_output["name"], "identifier": identifier})
     # replace "." with "__dot__" in the keys of a dictionary
     if deserializers:
         deserializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in deserializers.items()})

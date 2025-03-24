@@ -121,6 +121,7 @@ def pyfunction(
             result, _ = run_get_node(*args, **kwargs)
             return result
 
+        decorated_function.func = function  # type: ignore[attr-defined]
         decorated_function.run = decorated_function  # type: ignore[attr-defined]
         decorated_function.run_get_pk = run_get_pk  # type: ignore[attr-defined]
         decorated_function.run_get_node = run_get_node  # type: ignore[attr-defined]
