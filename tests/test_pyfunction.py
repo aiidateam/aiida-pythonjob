@@ -85,3 +85,36 @@ def test_namespace_output():
     assert result["add_multiply"]["add"]["order1"].value == 3
     assert result["add_multiply"]["add"]["order2"].value == 5
     assert result["add_multiply"]["multiply"].value == 2
+
+
+def test_override_outputs():
+    """Test function with namespace output and input."""
+
+    @pyfunction()
+    def myfunc(x, y):
+        add = {"order1": x + y, "order2": x * x + y * y}
+        return {
+            "add_multiply": {"add": add, "multiply": x * y},
+            "minus": x - y,
+        }
+
+    result, node = run_get_node(
+        myfunc,
+        x=1,
+        y=2,
+        function_outputs=[
+            {
+                "name": "add_multiply",
+                "identifier": "namespace",
+            },
+            {
+                "name": "add_multiply.add",
+                "identifier": "namespace",
+            },
+            {"name": "minus"},
+        ],
+    )
+
+    assert result["add_multiply"]["add"]["order1"].value == 3
+    assert result["add_multiply"]["add"]["order2"].value == 5
+    assert result["add_multiply"]["multiply"].value == 2
