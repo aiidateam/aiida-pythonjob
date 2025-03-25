@@ -12,19 +12,12 @@ def test_build_function_data():
     assert function_data["name"] == "build_function_data"
     assert "source_code" in function_data
     assert "pickled_function" in function_data
-    node = function_data["pickled_function"]
-    with node.base.repository.open(node.FILENAME, mode="rb") as f:
-        text = f.read()
-        assert b"cloudpickle" not in text
-
+    assert b"cloudpickle" not in function_data["pickled_function"]
     function_data = build_function_data(build_function_data, register_pickle_by_value=True)
     assert function_data["name"] == "build_function_data"
     assert "source_code" in function_data
     assert "pickled_function" in function_data
-    node = function_data["pickled_function"]
-    with node.base.repository.open(node.FILENAME, mode="rb") as f:
-        text = f.read()
-        assert b"cloudpickle" in text
+    assert b"cloudpickle" in function_data["pickled_function"]
 
     def local_function(x, y):
         return x + y
