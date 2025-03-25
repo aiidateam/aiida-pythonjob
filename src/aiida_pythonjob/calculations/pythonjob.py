@@ -7,6 +7,7 @@ import typing as t
 
 from aiida.common.datastructures import CalcInfo, CodeInfo
 from aiida.common.folders import Folder
+from aiida.common.lang import override
 from aiida.engine import CalcJob, CalcJobProcessSpec
 from aiida.orm import (
     Data,
@@ -37,17 +38,14 @@ class PythonJob(CalcJob):
     _DEFAULT_INPUT_FILE = "script.py"
     _DEFAULT_OUTPUT_FILE = "aiida.out"
     _DEFAULT_PARENT_FOLDER_NAME = "./parent_folder/"
+    _SOURCE_CODE_KEY = "source_code"
 
     @classmethod
     def define(cls, spec: CalcJobProcessSpec) -> None:  # type: ignore[override]
         """Define the process specification, including its inputs, outputs and known exit codes."""
         super().define(spec)
-        spec.input_namespace("function_data")
-        spec.input("function_data.name", valid_type=Str, serializer=to_aiida_type)
-        spec.input("function_data.source_code", valid_type=Str, serializer=to_aiida_type, required=False)
+        spec.input_namespace("function_data", dynamic=True, required=True)
         spec.input("function_data.outputs", valid_type=List, serializer=to_aiida_type, required=False)
-        spec.input("function_data.pickled_function", valid_type=Data, required=False)
-        spec.input("function_data.mode", valid_type=Str, serializer=to_aiida_type, required=False)
         spec.input("process_label", valid_type=Str, serializer=to_aiida_type, required=False)
         spec.input_namespace("function_inputs", valid_type=Data, required=False)
         spec.input(
@@ -175,13 +173,9 @@ class PythonJob(CalcJob):
     def get_function_name(self) -> str:
         """Return the name of the function to run."""
         if "name" in self.inputs.function_data:
-            name = self.inputs.function_data.name.value
+            name = self.inputs.function_data.name
         else:
-            try:
-                name = self.inputs.function_data.pickled_function.value.__name__
-            except AttributeError:
-                # If a user doesn't specify name, fallback to something generic
-                name = "anonymous_function"
+            name = "anonymous_function"
         return name
 
     def _build_process_label(self) -> str:
@@ -191,6 +185,13 @@ class PythonJob(CalcJob):
         else:
             name = self.get_function_name()
             return f"PythonJob<{name}>"
+
+    @override
+    def _setup_db_record(self) -> None:
+        """Set up the database record for the process."""
+        super()._setup_db_record()
+        if "source_code" in self.inputs.function_data:
+            self.node.base.attributes.set(self._SOURCE_CODE_KEY, self.inputs.function_data.source_code)
 
     def on_create(self) -> None:
         """Called when a Process is created."""
@@ -223,19 +224,13 @@ class PythonJob(CalcJob):
         else:
             parent_folder_name = self._DEFAULT_PARENT_FOLDER_NAME
 
-        function_data = self.inputs.function_data
-
         # Build the Python script
-        source_code = function_data.get("source_code")
-        if "pickled_function" in self.inputs.function_data:
-            pickled_function = self.inputs.function_data.pickled_function.get_serialized_value()
-        else:
-            pickled_function = None
-        # Generate script.py content
+        source_code = self.node.base.attributes.get(self._SOURCE_CODE_KEY, None)
+        pickled_function = self.inputs.function_data.pickled_function
         function_name = self.get_function_name()  # or some user-defined name
         script_content = generate_script_py(
             pickled_function=pickled_function,
-            source_code=source_code.value if source_code else None,
+            source_code=source_code,
             function_name=function_name,
         )
 

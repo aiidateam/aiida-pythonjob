@@ -310,3 +310,22 @@ def test_local_function(fixture_localhost):
     )
     result, node = run_get_node(PythonJob, **inputs)
     assert result["result"].value == 8
+
+
+@pytest.mark.usefixtures("started_daemon_client")
+def test_submit(fixture_localhost):
+    """Test decorator."""
+    from aiida.engine import submit
+
+    def add(x, y):
+        return x + y
+
+    inputs = prepare_pythonjob_inputs(
+        add,
+        function_inputs={"x": 1, "y": 2},
+        process_label="add",
+    )
+    node = submit(PythonJob, **inputs, wait=True)
+
+    assert node.outputs.result.value == 3
+    assert node.process_label == "add"
