@@ -38,20 +38,18 @@ class PyFunction(Process):
 
     @property
     def func(self) -> t.Callable[..., t.Any]:
+        import cloudpickle
+
         if self._func is None:
-            self._func = self.inputs.function_data.pickled_function.value
+            self._func = cloudpickle.loads(self.inputs.function_data.pickled_function)
         return self._func
 
     @classmethod
     def define(cls, spec: ProcessSpec) -> None:  # type: ignore[override]
         """Define the process specification, including its inputs, outputs and known exit codes."""
         super().define(spec)
-        spec.input_namespace("function_data")
-        spec.input("function_data.name", valid_type=Str, serializer=to_aiida_type)
-        spec.input("function_data.source_code", valid_type=Str, serializer=to_aiida_type, required=False)
+        spec.input_namespace("function_data", dynamic=True, required=True)
         spec.input("function_data.outputs", valid_type=List, serializer=to_aiida_type, required=False)
-        spec.input("function_data.pickled_function", valid_type=Data, required=False)
-        spec.input("function_data.mode", valid_type=Str, serializer=to_aiida_type, required=False)
         spec.input("process_label", valid_type=Str, serializer=to_aiida_type, required=False)
         spec.input_namespace("function_inputs", valid_type=Data, required=False)
         spec.input(
@@ -88,10 +86,10 @@ class PyFunction(Process):
     def get_function_name(self) -> str:
         """Return the name of the function to run."""
         if "name" in self.inputs.function_data:
-            name = self.inputs.function_data.name.value
+            name = self.inputs.function_data.name
         else:
             try:
-                name = self.inputs.function_data.pickled_function.value.__name__
+                name = self.func.__name__
             except AttributeError:
                 # If a user doesn't specify name, fallback to something generic
                 name = "anonymous_function"

@@ -54,8 +54,6 @@ def inspect_function(
     # the source code is not saved in the pickle file
     import cloudpickle
 
-    from aiida_pythonjob.data.pickled_data import PickledData
-
     if inspect_source:
         try:
             source_code = inspect.getsource(func)
@@ -70,10 +68,10 @@ def inspect_function(
     if register_pickle_by_value:
         module = importlib.import_module(func.__module__)
         cloudpickle.register_pickle_by_value(module)
-        pickled_function = PickledData(value=func)
+        pickled_function = cloudpickle.dumps(func)
         cloudpickle.unregister_pickle_by_value(module)
     else:
-        pickled_function = PickledData(value=func)
+        pickled_function = cloudpickle.dumps(func)
 
     return {"source_code": source_code, "mode": "use_pickled_function", "pickled_function": pickled_function}
 
