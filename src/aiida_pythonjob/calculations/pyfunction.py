@@ -202,8 +202,10 @@ class PyFunction(Process):
                 if exit_code.status != 0:
                     return exit_code
             if len(top_level_output_list) == 1:
-                # If output name in results, use it
-                if top_level_output_list[0]["name"] in results:
+                # User returned a single (nested) dict with AiiDA data nodes as values
+                if self.already_serialized(results):
+                    top_level_output_list = [{"name": key, "value": value} for key, value in results.items()]
+                elif top_level_output_list[0]["name"] in results:
                     top_level_output_list[0]["value"] = self.serialize_output(
                         results.pop(top_level_output_list[0]["name"]),
                         top_level_output_list[0],
@@ -228,8 +230,14 @@ class PyFunction(Process):
                 if len(results) > 0:
                     self.logger.warning(f"Found extra results that are not included in the output: {results.keys()}")
         elif len(top_level_output_list) == 1:
-            # Single top-level output, single result
-            top_level_output_list[0]["value"] = self.serialize_output(results, top_level_output_list[0])
+            # Single top-level output
+            # There are two cases:
+            # 1. The output as a whole will be serialized as the single output
+            # 2. The output is a mapping with already AiiDA data nodes as values, no need to serialize
+            if self.already_serialized(results):
+                top_level_output_list[0]["value"] = results
+            else:
+                top_level_output_list[0]["value"] = self.serialize_output(results, top_level_output_list[0])
         else:
             return self.exit_codes.ERROR_RESULT_OUTPUT_MISMATCH
         # Store the outputs
@@ -237,6 +245,20 @@ class PyFunction(Process):
             self.out(output["name"], output["value"])
 
         return ExitCode()
+
+    def already_serialized(self, results):
+        """Check if the results are already serialized."""
+        import collections
+
+        if isinstance(results, Data):
+            return True
+        elif isinstance(results, collections.abc.Mapping):
+            for value in results.values():
+                if not self.already_serialized(value):
+                    return False
+            return True
+        else:
+            return False
 
     def find_output(self, name):
         """Find the output spec with the given name."""
