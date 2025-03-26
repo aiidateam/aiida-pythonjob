@@ -49,7 +49,8 @@ class PyFunction(Process):
         """Define the process specification, including its inputs, outputs and known exit codes."""
         super().define(spec)
         spec.input_namespace("function_data", dynamic=True, required=True)
-        spec.input("function_data.outputs", valid_type=List, serializer=to_aiida_type, required=False)
+        spec.input("function_data.output_ports", valid_type=List, serializer=to_aiida_type, required=False)
+        spec.input("function_data.input_ports", valid_type=List, serializer=to_aiida_type, required=False)
         spec.input("process_label", valid_type=Str, serializer=to_aiida_type, required=False)
         spec.input_namespace("function_inputs", valid_type=Data, required=False)
         spec.input(
@@ -174,12 +175,12 @@ class PyFunction(Process):
 
         results = self.func(*raw_args, **raw_kwargs)
 
-        # Read function_outputs specification
-        if "outputs" in self.inputs.function_data:
-            function_outputs = self.node.inputs.function_data.outputs.get_list()
+        # Read output_ports specification
+        if "output_ports" in self.inputs.function_data:
+            output_ports = self.node.inputs.function_data.output_ports.get_list()
         else:
-            function_outputs = [{"name": "result"}]
-        self.output_list = function_outputs
+            output_ports = [{"name": "result"}]
+        self.output_list = output_ports
 
         # If nested outputs like "add_multiply.add", keep only top-level
         top_level_output_list = [output for output in self.output_list if "." not in output["name"]]

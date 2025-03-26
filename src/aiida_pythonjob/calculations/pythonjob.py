@@ -45,7 +45,7 @@ class PythonJob(CalcJob):
         """Define the process specification, including its inputs, outputs and known exit codes."""
         super().define(spec)
         spec.input_namespace("function_data", dynamic=True, required=True)
-        spec.input("function_data.outputs", valid_type=List, serializer=to_aiida_type, required=False)
+        spec.input("function_data.output_ports", valid_type=List, serializer=to_aiida_type, required=False)
         spec.input("process_label", valid_type=Str, serializer=to_aiida_type, required=False)
         spec.input_namespace("function_inputs", valid_type=Data, required=False)
         spec.input(

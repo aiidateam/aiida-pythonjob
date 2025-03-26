@@ -49,7 +49,7 @@ def create_parser(result, function_data, error: dict | None = None, output_filen
 
 def test_tuple_result(fixture_localhost):
     result = (1, 2, 3)
-    function_data = {"outputs": orm.List([{"name": "a"}, {"name": "b"}, {"name": "c"}])}
+    function_data = {"output_ports": orm.List([{"name": "a"}, {"name": "b"}, {"name": "c"}])}
     parser = create_parser(result, function_data)
     exit_code = parser.parse()
     assert exit_code is None
@@ -58,7 +58,7 @@ def test_tuple_result(fixture_localhost):
 
 def test_tuple_result_mismatch(fixture_localhost):
     result = (1, 2)
-    function_data = {"outputs": orm.List([{"name": "a"}, {"name": "b"}, {"name": "c"}])}
+    function_data = {"output_ports": orm.List([{"name": "a"}, {"name": "b"}, {"name": "c"}])}
     parser = create_parser(result, function_data)
     exit_code = parser.parse()
     assert exit_code == parser.exit_codes.ERROR_RESULT_OUTPUT_MISMATCH
@@ -66,7 +66,7 @@ def test_tuple_result_mismatch(fixture_localhost):
 
 def test_dict_result(fixture_localhost):
     result = {"a": 1, "b": 2, "c": 3}
-    function_data = {"outputs": orm.List([{"name": "a"}, {"name": "b"}])}
+    function_data = {"output_ports": orm.List([{"name": "a"}, {"name": "b"}])}
     parser = create_parser(result, function_data)
     exit_code = parser.parse()
     assert exit_code is None
@@ -77,7 +77,7 @@ def test_dict_result(fixture_localhost):
 
 def test_dict_result_missing(fixture_localhost):
     result = {"a": 1, "b": 2}
-    function_data = {"outputs": orm.List([{"name": "a"}, {"name": "b"}, {"name": "c"}])}
+    function_data = {"output_ports": orm.List([{"name": "a"}, {"name": "b"}, {"name": "c"}])}
     parser = create_parser(result, function_data)
     exit_code = parser.parse()
     assert exit_code == parser.exit_codes.ERROR_MISSING_OUTPUT
@@ -85,7 +85,7 @@ def test_dict_result_missing(fixture_localhost):
 
 def test_dict_result_as_one_output(fixture_localhost):
     result = {"a": 1, "b": 2, "c": 3}
-    function_data = {"outputs": orm.List([{"name": "result"}])}
+    function_data = {"output_ports": orm.List([{"name": "result"}])}
     parser = create_parser(result, function_data)
     exit_code = parser.parse()
     assert exit_code is None
@@ -95,7 +95,7 @@ def test_dict_result_as_one_output(fixture_localhost):
 
 def test_dict_result_only_show_one_output(fixture_localhost):
     result = {"a": 1, "b": 2}
-    function_data = {"outputs": orm.List([{"name": "a"}])}
+    function_data = {"output_ports": orm.List([{"name": "a"}])}
     parser = create_parser(result, function_data)
     parser.parse()
     assert len(parser.outputs) == 1
@@ -106,14 +106,14 @@ def test_dict_result_only_show_one_output(fixture_localhost):
 
 def test_exit_code(fixture_localhost):
     result = {"a": 1, "exit_code": {"status": 0, "message": ""}}
-    function_data = {"outputs": orm.List([{"name": "a"}])}
+    function_data = {"output_ports": orm.List([{"name": "a"}])}
     parser = create_parser(result, function_data)
     exit_code = parser.parse()
     assert exit_code is None
     assert parser.outputs["a"] == 1
     #
     result = {"exit_code": {"status": 1, "message": "error"}}
-    function_data = {"outputs": orm.List([{"name": "a"}, {"name": "b"}, {"name": "c"}])}
+    function_data = {"output_ports": orm.List([{"name": "a"}, {"name": "b"}, {"name": "c"}])}
     parser = create_parser(result, function_data)
     exit_code = parser.parse()
     assert exit_code is not None
@@ -123,7 +123,7 @@ def test_exit_code(fixture_localhost):
 
 def test_no_output_file(fixture_localhost):
     result = {"a": 1, "b": 2, "c": 3}
-    function_data = {"outputs": orm.List([{"name": "result"}])}
+    function_data = {"output_ports": orm.List([{"name": "result"}])}
     parser = create_parser(result, function_data, output_filename="not_results.pickle")
     exit_code = parser.parse()
     assert exit_code == parser.exit_codes.ERROR_READING_OUTPUT_FILE
@@ -142,7 +142,7 @@ def test_no_output_file(fixture_localhost):
 def test_run_script_error(error_type, status):
     error = {"error_type": error_type, "exception_message": "error", "traceback": "traceback"}
     result = {"a": 1, "exit_code": {"status": 0, "message": ""}}
-    function_data = {"outputs": orm.List([{"name": "a"}])}
+    function_data = {"output_ports": orm.List([{"name": "a"}])}
     parser = create_parser(result, function_data, error=error)
     exit_code = parser.parse()
     assert exit_code is not None

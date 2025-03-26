@@ -6,13 +6,14 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 from aiida import orm
 
-from .utils import build_function_data, get_or_create_code
+from .utils import build_function_data, format_input_output_ports, get_or_create_code
 
 
 def prepare_pythonjob_inputs(
     function: Optional[Callable[..., Any]] = None,
     function_inputs: Optional[Dict[str, Any]] = None,
-    function_outputs: Optional[List[str | dict]] = None,
+    input_ports: Optional[List[str | dict]] = None,
+    output_ports: Optional[List[str | dict]] = None,
     code: Optional[orm.AbstractCode] = None,
     command_info: Optional[Dict[str, str]] = None,
     computer: Union[str, orm.Computer] = "localhost",
@@ -59,7 +60,10 @@ def prepare_pythonjob_inputs(
     # serialize the kwargs into AiiDA Data
     function_inputs = function_inputs or {}
     function_inputs = serialize_to_aiida_nodes(function_inputs, serializers=serializers, deserializers=deserializers)
-    function_data["outputs"] = function_outputs or [{"name": "result"}]
+    output_ports = output_ports or [{"name": "result"}]
+    input_ports = input_ports or []
+    function_data["output_ports"] = format_input_output_ports(output_ports)
+    function_data["input_ports"] = format_input_output_ports(input_ports)
     # replace "." with "__dot__" in the keys of a dictionary
     if deserializers:
         deserializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in deserializers.items()})
@@ -100,7 +104,8 @@ def create_inputs(func, *args: Any, **kwargs: Any) -> dict[str, Any]:
 def prepare_pyfunction_inputs(
     function: Optional[Callable[..., Any]] = None,
     function_inputs: Optional[Dict[str, Any]] = None,
-    function_outputs: Optional[List[str | dict]] = None,
+    input_ports: Optional[List[str | dict]] = None,
+    output_ports: Optional[List[str | dict]] = None,
     metadata: Optional[Dict[str, Any]] = None,
     process_label: Optional[str] = None,
     function_data: dict | None = None,
@@ -129,16 +134,10 @@ def prepare_pyfunction_inputs(
     # serialize the kwargs into AiiDA Data
     function_inputs = function_inputs or {}
     function_inputs = serialize_to_aiida_nodes(function_inputs, serializers=serializers, deserializers=deserializers)
-    function_data["outputs"] = []
-    function_outputs = function_outputs or [{"name": "result"}]
-    # if the output is WORKGRAPH.NAMESPACE, we need to change it to NAMESPACE
-    for output in function_outputs:
-        formated_output = {"name": output} if isinstance(output, str) else output
-        identifier = formated_output.get("identifier", "any")
-        if identifier.split(".")[-1].upper() == "NAMESPACE":
-            function_data["outputs"].append({"name": formated_output["name"], "identifier": "NAMESPACE"})
-        else:
-            function_data["outputs"].append({"name": formated_output["name"], "identifier": identifier})
+    output_ports = output_ports or [{"name": "result"}]
+    input_ports = input_ports or []
+    function_data["output_ports"] = format_input_output_ports(output_ports)
+    function_data["input_ports"] = format_input_output_ports(input_ports)
     # replace "." with "__dot__" in the keys of a dictionary
     if deserializers:
         deserializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in deserializers.items()})

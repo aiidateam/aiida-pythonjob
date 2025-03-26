@@ -103,7 +103,7 @@ def test_override_outputs():
         myfunc,
         x=1,
         y=2,
-        function_outputs=[
+        output_ports=[
             {
                 "name": "add_multiply",
                 "identifier": "namespace",

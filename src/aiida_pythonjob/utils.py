@@ -253,3 +253,20 @@ Please check!
                 return True, "Environment setup is complete."
 
     return True, None
+
+
+def format_input_output_ports(data):
+    new_data = []
+    # if the output is WORKGRAPH.NAMESPACE, we need to change it to NAMESPACE
+    for item in data:
+        if isinstance(item, str):
+            new_data.append({"name": item})
+        elif isinstance(item, dict):
+            identifier = item.get("identifier", "any")
+            if identifier.split(".")[-1].upper() == "NAMESPACE":
+                new_data.append({"name": item["name"], "identifier": "NAMESPACE"})
+            else:
+                new_data.append({"name": item["name"], "identifier": identifier})
+        else:
+            raise ValueError(f"Invalid schema: {item}")
+    return new_data

@@ -21,12 +21,12 @@ class PythonJobParser(Parser):
     def parse(self, **kwargs):
         import pickle
 
-        # Read function_outputs specification
-        if "outputs" in self.node.inputs.function_data:
-            function_outputs = self.node.inputs.function_data.outputs.get_list()
+        # Read output_ports specification
+        if "output_ports" in self.node.inputs.function_data:
+            output_ports = self.node.inputs.function_data.output_ports.get_list()
         else:
-            function_outputs = [{"name": "result"}]
-        self.output_list = function_outputs
+            output_ports = [{"name": "result"}]
+        self.output_ports = output_ports
 
         # load custom serializers
         if "serializers" in self.node.inputs and self.node.inputs.serializers:
@@ -37,7 +37,7 @@ class PythonJobParser(Parser):
             self.serializers = None
 
         # If nested outputs like "add_multiply.add", keep only top-level
-        top_level_output_list = [output for output in self.output_list if "." not in output["name"]]
+        top_level_output_list = [output for output in self.output_ports if "." not in output["name"]]
 
         # 1) Read _error.json
         error_data = {}
@@ -133,7 +133,7 @@ class PythonJobParser(Parser):
 
     def find_output(self, name):
         """Find the output spec with the given name."""
-        for output in self.output_list:
+        for output in self.output_ports:
             if output["name"] == name:
                 return output
         return None

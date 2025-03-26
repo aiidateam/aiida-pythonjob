@@ -19,6 +19,7 @@ LOGGER = logging.getLogger(__name__)
 
 # The following code is modified from the aiida-core.engine.processes.functions module
 def pyfunction(
+    inputs: t.Optional[Mapping[str, Any]] = None,
     outputs: t.Optional[t.List[Mapping[str, Any]]] = None,
 ) -> t.Callable[[FunctionType], FunctionType]:
     """The base function decorator to create a FunctionProcess out of a normal python function.
@@ -58,10 +59,14 @@ def pyfunction(
 
             manager = get_manager()
             runner = manager.get_runner()
-            inputs = create_inputs(function, *args, **kwargs)
-            function_outputs = inputs.pop("function_outputs", {}) or outputs
-            inputs = prepare_pyfunction_inputs(
-                function=function, function_inputs=inputs, function_outputs=function_outputs
+            output_ports = kwargs.pop("output_ports", {}) or outputs
+            input_ports = kwargs.pop("input_ports", {}) or inputs
+            function_inputs = create_inputs(function, *args, **kwargs)
+            process_inputs = prepare_pyfunction_inputs(
+                function=function,
+                function_inputs=function_inputs,
+                output_ports=output_ports,
+                input_ports=input_ports,
             )
 
             # # Remove all the known inputs from the kwargs
@@ -72,7 +77,7 @@ def pyfunction(
             # if kwargs and not process_class.spec().inputs.dynamic:
             #     raise ValueError(f'{function.__name__} does not support these kwargs: {kwargs.keys()}')
 
-            process = PyFunction(inputs=inputs, runner=runner)
+            process = PyFunction(inputs=process_inputs, runner=runner)
 
             # Only add handlers for interrupt signal to kill the process if we are in a local and not a daemon runner.
             # Without this check, running process functions in a daemon worker would be killed if the daemon is shutdown
@@ -99,7 +104,7 @@ def pyfunction(
                 if original_handler:
                     signal.signal(signal.SIGINT, original_handler)
 
-            store_provenance = inputs.get("metadata", {}).get("store_provenance", True)
+            store_provenance = process_inputs.get("metadata", {}).get("store_provenance", True)
             if not store_provenance:
                 process.node._storable = False
                 process.node._unstorable_message = "cannot store node because it was run with `store_provenance=False`"
