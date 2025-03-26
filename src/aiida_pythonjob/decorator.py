@@ -59,23 +59,29 @@ def pyfunction(
 
             manager = get_manager()
             runner = manager.get_runner()
-            output_ports = kwargs.pop("output_ports", {}) or outputs
-            input_ports = kwargs.pop("input_ports", {}) or inputs
+            # # Remove all the known inputs from the kwargs
+            output_ports = kwargs.pop("output_ports", None) or outputs
+            input_ports = kwargs.pop("input_ports", None) or inputs
+            metadata = kwargs.pop("metadata", None)
+            function_data = kwargs.pop("function_data", None)
+            deserializers = kwargs.pop("deserializers", None)
+            serializers = kwargs.pop("serializers", None)
+            process_label = kwargs.pop("process_label", None)
+            register_pickle_by_value = kwargs.pop("register_pickle_by_value", False)
+
             function_inputs = create_inputs(function, *args, **kwargs)
             process_inputs = prepare_pyfunction_inputs(
                 function=function,
                 function_inputs=function_inputs,
-                output_ports=output_ports,
                 input_ports=input_ports,
+                output_ports=output_ports,
+                metadata=metadata,
+                process_label=process_label,
+                function_data=function_data,
+                deserializers=deserializers,
+                serializers=serializers,
+                register_pickle_by_value=register_pickle_by_value,
             )
-
-            # # Remove all the known inputs from the kwargs
-            # for port in process_class.spec().inputs:
-            #     kwargs.pop(port, None)
-
-            # # If any kwargs remain, the spec should be dynamic, so we raise if it isn't
-            # if kwargs and not process_class.spec().inputs.dynamic:
-            #     raise ValueError(f'{function.__name__} does not support these kwargs: {kwargs.keys()}')
 
             process = PyFunction(inputs=process_inputs, runner=runner)
 

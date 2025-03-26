@@ -8,7 +8,7 @@ from aiida.engine import run_get_node
 from aiida_pythonjob import PythonJob, prepare_pythonjob_inputs
 
 
-def test_validate_inputs():
+def test_validate_inputs(fixture_localhost):
     def add(x, y):
         return x + y
 
@@ -115,10 +115,7 @@ def test_namespace_output(fixture_localhost):
             {
                 "name": "add_multiply",
                 "identifier": "namespace",
-            },
-            {
-                "name": "add_multiply.add",
-                "identifier": "namespace",
+                "ports": [{"name": "add", "identifier": "namespace"}, "multiply"],
             },
             {"name": "minus"},
         ],

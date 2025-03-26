@@ -6,7 +6,12 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 from aiida import orm
 
-from .utils import build_function_data, format_input_output_ports, get_or_create_code
+from .utils import (
+    build_function_data,
+    build_input_port_definitions,
+    format_input_output_ports,
+    get_or_create_code,
+)
 
 
 def prepare_pythonjob_inputs(
@@ -27,7 +32,7 @@ def prepare_pythonjob_inputs(
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """Prepare the inputs for PythonJob"""
-    from .data.serializer import serialize_to_aiida_nodes
+    from .utils import serialize_ports
 
     if function is None and function_data is None:
         raise ValueError("Either function or function_data must be provided")
@@ -57,13 +62,16 @@ def prepare_pythonjob_inputs(
     if code is None:
         command_info = command_info or {}
         code = get_or_create_code(computer=computer, **command_info)
+    output_ports = output_ports or [{"name": "result"}]
+    output_ports = {"name": "outputs", "identifier": "namespace", "ports": output_ports or [{"name": "result"}]}
+    input_ports = {"name": "inputs", "identifier": "namespace", "ports": input_ports or []}
+    input_ports = format_input_output_ports(input_ports)
+    input_ports = build_input_port_definitions(func=function, input_ports=input_ports)
+    function_data["output_ports"] = format_input_output_ports(output_ports)
+    function_data["input_ports"] = input_ports
     # serialize the kwargs into AiiDA Data
     function_inputs = function_inputs or {}
-    function_inputs = serialize_to_aiida_nodes(function_inputs, serializers=serializers, deserializers=deserializers)
-    output_ports = output_ports or [{"name": "result"}]
-    input_ports = input_ports or []
-    function_data["output_ports"] = format_input_output_ports(output_ports)
-    function_data["input_ports"] = format_input_output_ports(input_ports)
+    function_inputs = serialize_ports(python_data=function_inputs, port_schema=input_ports, serializers=serializers)
     # replace "." with "__dot__" in the keys of a dictionary
     if deserializers:
         deserializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in deserializers.items()})
@@ -117,7 +125,7 @@ def prepare_pyfunction_inputs(
     """Prepare the inputs for PythonJob"""
     import types
 
-    from .data.serializer import serialize_to_aiida_nodes
+    from .utils import serialize_ports
 
     if function is None and function_data is None:
         raise ValueError("Either function or function_data must be provided")
@@ -131,13 +139,15 @@ def prepare_pyfunction_inputs(
             raise NotImplementedError("Built-in functions are not supported yet")
         else:
             raise ValueError("Invalid function type")
+    output_ports = {"name": "outputs", "identifier": "namespace", "ports": output_ports or [{"name": "result"}]}
+    input_ports = {"name": "inputs", "identifier": "namespace", "ports": input_ports or []}
+    input_ports = format_input_output_ports(input_ports)
+    input_ports = build_input_port_definitions(func=function, input_ports=input_ports)
+    function_data["output_ports"] = format_input_output_ports(output_ports)
+    function_data["input_ports"] = input_ports
     # serialize the kwargs into AiiDA Data
     function_inputs = function_inputs or {}
-    function_inputs = serialize_to_aiida_nodes(function_inputs, serializers=serializers, deserializers=deserializers)
-    output_ports = output_ports or [{"name": "result"}]
-    input_ports = input_ports or []
-    function_data["output_ports"] = format_input_output_ports(output_ports)
-    function_data["input_ports"] = format_input_output_ports(input_ports)
+    function_inputs = serialize_ports(python_data=function_inputs, port_schema=input_ports, serializers=serializers)
     # replace "." with "__dot__" in the keys of a dictionary
     if deserializers:
         deserializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in deserializers.items()})
