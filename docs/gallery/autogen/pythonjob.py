@@ -91,7 +91,7 @@ print("result: ", result["result"])
 # Custom outputs
 # --------------
 # If the function return a dictionary with fixed number of keys, and you
-# want to store the values as separate outputs, you can specify the `function_outputs` parameter.
+# want to store the values as separate outputs, you can specify the `output_ports` parameter.
 # For a dynamic number of outputs, you can use the namespace output, which is explained later.
 #
 
@@ -103,7 +103,7 @@ def add(x, y):
 inputs = prepare_pythonjob_inputs(
     add,
     function_inputs={"x": 1, "y": 2},
-    function_outputs=[
+    output_ports=[
         {"name": "sum"},
         {"name": "diff"},
     ],
@@ -142,7 +142,7 @@ def multiply(x, y):
 inputs1 = prepare_pythonjob_inputs(
     add,
     function_inputs={"x": 1, "y": 2},
-    function_outputs=[{"name": "sum"}],
+    output_ports=[{"name": "sum"}],
 )
 
 result1, node1 = run_get_node(PythonJob, inputs=inputs1)
@@ -150,7 +150,7 @@ result1, node1 = run_get_node(PythonJob, inputs=inputs1)
 inputs2 = prepare_pythonjob_inputs(
     multiply,
     function_inputs={"x": 1, "y": 2},
-    function_outputs=[{"name": "product"}],
+    output_ports=[{"name": "product"}],
     parent_folder=result1["remote_folder"],
 )
 
@@ -270,7 +270,7 @@ def generate_structures(structure: Atoms, factor_lst: list) -> dict:
 inputs = prepare_pythonjob_inputs(
     generate_structures,
     function_inputs={"structure": bulk("Al"), "factor_lst": [0.95, 1.0, 1.05]},
-    function_outputs=[{"name": "scaled_structures", "identifier": "namespace"}],
+    output_ports=[{"name": "scaled_structures", "identifier": "namespace"}],
 )
 
 result, node = run_get_node(PythonJob, inputs=inputs)

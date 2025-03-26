@@ -19,6 +19,7 @@ LOGGER = logging.getLogger(__name__)
 
 # The following code is modified from the aiida-core.engine.processes.functions module
 def pyfunction(
+    inputs: t.Optional[Mapping[str, Any]] = None,
     outputs: t.Optional[t.List[Mapping[str, Any]]] = None,
 ) -> t.Callable[[FunctionType], FunctionType]:
     """The base function decorator to create a FunctionProcess out of a normal python function.
@@ -58,21 +59,31 @@ def pyfunction(
 
             manager = get_manager()
             runner = manager.get_runner()
-            inputs = create_inputs(function, *args, **kwargs)
-            function_outputs = inputs.pop("function_outputs", {}) or outputs
-            inputs = prepare_pyfunction_inputs(
-                function=function, function_inputs=inputs, function_outputs=function_outputs
+            # # Remove all the known inputs from the kwargs
+            output_ports = kwargs.pop("output_ports", None) or outputs
+            input_ports = kwargs.pop("input_ports", None) or inputs
+            metadata = kwargs.pop("metadata", None)
+            function_data = kwargs.pop("function_data", None)
+            deserializers = kwargs.pop("deserializers", None)
+            serializers = kwargs.pop("serializers", None)
+            process_label = kwargs.pop("process_label", None)
+            register_pickle_by_value = kwargs.pop("register_pickle_by_value", False)
+
+            function_inputs = create_inputs(function, *args, **kwargs)
+            process_inputs = prepare_pyfunction_inputs(
+                function=function,
+                function_inputs=function_inputs,
+                input_ports=input_ports,
+                output_ports=output_ports,
+                metadata=metadata,
+                process_label=process_label,
+                function_data=function_data,
+                deserializers=deserializers,
+                serializers=serializers,
+                register_pickle_by_value=register_pickle_by_value,
             )
 
-            # # Remove all the known inputs from the kwargs
-            # for port in process_class.spec().inputs:
-            #     kwargs.pop(port, None)
-
-            # # If any kwargs remain, the spec should be dynamic, so we raise if it isn't
-            # if kwargs and not process_class.spec().inputs.dynamic:
-            #     raise ValueError(f'{function.__name__} does not support these kwargs: {kwargs.keys()}')
-
-            process = PyFunction(inputs=inputs, runner=runner)
+            process = PyFunction(inputs=process_inputs, runner=runner)
 
             # Only add handlers for interrupt signal to kill the process if we are in a local and not a daemon runner.
             # Without this check, running process functions in a daemon worker would be killed if the daemon is shutdown
@@ -99,7 +110,7 @@ def pyfunction(
                 if original_handler:
                     signal.signal(signal.SIGINT, original_handler)
 
-            store_provenance = inputs.get("metadata", {}).get("store_provenance", True)
+            store_provenance = process_inputs.get("metadata", {}).get("store_provenance", True)
             if not store_provenance:
                 process.node._storable = False
                 process.node._unstorable_message = "cannot store node because it was run with `store_provenance=False`"

@@ -8,7 +8,7 @@ from aiida.engine import run_get_node
 from aiida_pythonjob import PythonJob, prepare_pythonjob_inputs
 
 
-def test_validate_inputs():
+def test_validate_inputs(fixture_localhost):
     def add(x, y):
         return x + y
 
@@ -49,7 +49,7 @@ def test_function_custom_outputs(fixture_localhost):
     inputs = prepare_pythonjob_inputs(
         add,
         function_inputs={"x": 1, "y": 2},
-        function_outputs=[
+        output_ports=[
             {"name": "sum"},
             {"name": "diff"},
         ],
@@ -69,7 +69,7 @@ def test_importable_function(fixture_localhost):
     inputs = prepare_pythonjob_inputs(
         add,
         function_inputs={"x": 1, "y": 2},
-        function_outputs=[
+        output_ports=[
             {"name": "sum"},
         ],
     )
@@ -90,7 +90,7 @@ def test_kwargs_inputs(fixture_localhost):
     inputs = prepare_pythonjob_inputs(
         add,
         function_inputs={"x": 1, "y": 2, "a": 3, "b": 4},
-        function_outputs=[
+        output_ports=[
             {"name": "sum"},
         ],
     )
@@ -111,14 +111,11 @@ def test_namespace_output(fixture_localhost):
     inputs = prepare_pythonjob_inputs(
         myfunc,
         function_inputs={"x": 1, "y": 2},
-        function_outputs=[
+        output_ports=[
             {
                 "name": "add_multiply",
                 "identifier": "namespace",
-            },
-            {
-                "name": "add_multiply.add",
-                "identifier": "namespace",
+                "ports": [{"name": "add", "identifier": "namespace"}, "multiply"],
             },
             {"name": "minus"},
         ],
@@ -148,14 +145,14 @@ def test_parent_folder_remote(fixture_localhost):
     inputs1 = prepare_pythonjob_inputs(
         add,
         function_inputs={"x": 1, "y": 2},
-        function_outputs=[{"name": "sum"}],
+        output_ports=[{"name": "sum"}],
     )
     result1, node1 = run_get_node(PythonJob, inputs=inputs1)
 
     inputs2 = prepare_pythonjob_inputs(
         multiply,
         function_inputs={"x": 1, "y": 2},
-        function_outputs=[{"name": "product"}],
+        output_ports=[{"name": "product"}],
         parent_folder=result1["remote_folder"],
     )
     result2, node2 = run_get_node(PythonJob, inputs=inputs2)
@@ -181,7 +178,7 @@ def test_parent_folder_local(fixture_localhost):
         inputs2 = prepare_pythonjob_inputs(
             multiply,
             function_inputs={"x": 1, "y": 2},
-            function_outputs=[{"name": "product"}],
+            output_ports=[{"name": "product"}],
             parent_folder=parent_folder,
         )
         result2, node2 = run_get_node(PythonJob, inputs=inputs2)

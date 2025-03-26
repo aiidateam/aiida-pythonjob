@@ -30,7 +30,7 @@ print("result: ", result)
 # Custom outputs
 # --------------
 # If the function return a dictionary with fixed number of keys, and you
-# want to store the values as separate outputs, you can specify the `function_outputs` parameter.
+# want to store the values as separate outputs, you can specify the `outputs` parameter.
 # For a dynamic number of outputs, you can use the namespace output, which is explained later.
 #
 

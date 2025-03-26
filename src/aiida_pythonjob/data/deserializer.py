@@ -5,7 +5,8 @@ from typing import Any
 from aiida import common, orm
 
 from aiida_pythonjob.config import load_config
-from aiida_pythonjob.utils import import_from_path
+
+from .utils import import_from_path
 
 builtin_deserializers = {
     "aiida.orm.nodes.data.list.List": "aiida_pythonjob.data.deserializer.list_data_to_list",

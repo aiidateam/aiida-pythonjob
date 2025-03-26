@@ -2,7 +2,7 @@ import pytest
 from aiida_pythonjob.utils import build_function_data
 
 
-def test_build_function_data():
+def test_build_function_data(aiida_profile):
     """Test the build_function_data function behavior."""
 
     with pytest.raises(TypeError, match="Provided object is not a callable function or class."):

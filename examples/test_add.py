@@ -10,6 +10,6 @@ def add(x, y):
 
 
 inputs = prepare_pythonjob_inputs(
-    add, function_inputs={"x": 1, "y": 2}, function_outputs=[{"name": "add"}], computer="localhost"
+    add, function_inputs={"x": 1, "y": 2}, output_ports=[{"name": "add"}], computer="localhost"
 )
 run(PythonJob, inputs=inputs)

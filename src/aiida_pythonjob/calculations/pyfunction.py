@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import inspect
+import traceback
 import typing as t
 
 from aiida.common.lang import override
@@ -12,7 +12,6 @@ from aiida.orm import (
     CalcFunctionNode,
     Data,
     Dict,
-    List,
     Str,
     to_aiida_type,
 )
@@ -20,11 +19,6 @@ from aiida.orm import (
 __all__ = ("PyFunction",)
 
 
-# The following code is modified from the aiida-core.engine.processes.functions module
-
-
-# TODO: because aiida-core cmds hardcode `CalcFunctionNode`, I hardcoded `CalcFunctionNode` here.
-# In principle, aiida-core should support subclassing
 class PyFunction(Process):
     """"""
 
@@ -49,7 +43,8 @@ class PyFunction(Process):
         """Define the process specification, including its inputs, outputs and known exit codes."""
         super().define(spec)
         spec.input_namespace("function_data", dynamic=True, required=True)
-        spec.input("function_data.outputs", valid_type=List, serializer=to_aiida_type, required=False)
+        spec.input("function_data.output_ports", valid_type=Dict, serializer=to_aiida_type, required=False)
+        spec.input("function_data.input_ports", valid_type=Dict, serializer=to_aiida_type, required=False)
         spec.input("process_label", valid_type=Str, serializer=to_aiida_type, required=False)
         spec.input_namespace("function_inputs", valid_type=Data, required=False)
         spec.input(
@@ -81,6 +76,18 @@ class PyFunction(Process):
             "ERROR_RESULT_OUTPUT_MISMATCH",
             invalidates_cache=True,
             message="The number of results does not match the number of outputs.",
+        )
+        spec.exit_code(
+            323,
+            "ERROR_DESERIALIZE_INPUTS_FAILED",
+            invalidates_cache=True,
+            message="Failed to unpickle inputs.\n{exception}\n{traceback}",
+        )
+        spec.exit_code(
+            325,
+            "ERROR_FUNCTION_EXECUTION_FAILED",
+            invalidates_cache=True,
+            message="Function execution failed.\n{exception}\n{traceback}",
         )
 
     def get_function_name(self) -> str:
@@ -122,24 +129,13 @@ class PyFunction(Process):
     @override
     def run(self) -> ExitCode | None:
         """Run the process."""
+        from aiida_pythonjob.utils import deserialize_ports
 
-        from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
-
-        # The following conditional is required for the caching to properly work. Even if the source node has a process
-        # state of `Finished` the cached process will still enter the running state. The process state will have then
-        # been overridden by the engine to `Running` so we cannot check that, but if the `exit_status` is anything other
-        # than `None`, it should mean this node was taken from the cache, so the process should not be rerun.
+        # The following conditional is required for the caching to properly work.
+        # From the the calcfunction implementation in aiida-core
         if self.node.exit_status is not None:
             return ExitCode(self.node.exit_status, self.node.exit_message)
 
-        # Now the original functions arguments need to be reconstructed from the inputs to the process, as they were
-        # passed to the original function call. To do so, all positional parameters are popped from the inputs
-        # dictionary and added to the positional arguments list.
-        args = []
-        kwargs: dict[str, Data] = {}
-        inputs = dict(self.inputs.function_inputs or {})
-        inputs.pop("serializers", None)
-        inputs.pop("deserializers", None)
         # load custom serializers
         if "serializers" in self.node.inputs and self.node.inputs.serializers:
             serializers = self.node.inputs.serializers.get_dict()
@@ -154,135 +150,46 @@ class PyFunction(Process):
         else:
             self.deserializers = None
 
-        for name, parameter in inspect.signature(self.func).parameters.items():
-            if parameter.kind in [parameter.POSITIONAL_ONLY, parameter.POSITIONAL_OR_KEYWORD]:
-                if name in inputs:
-                    args.append(inputs.pop(name))
-            elif parameter.kind is parameter.VAR_POSITIONAL:
-                for key in [key for key in inputs.keys() if key.startswith(f"{name}_")]:
-                    args.append(inputs.pop(key))
+        inputs = dict(self.inputs.function_inputs or {})
+        try:
+            inputs = deserialize_ports(
+                serialized_data=inputs,
+                port_schema=self.node.inputs.function_data.input_ports.get_dict(),
+                deserializers=self.deserializers,
+            )
+        except Exception as exception:
+            exception_message = str(exception)
+            traceback_str = traceback.format_exc()
+            return self.exit_codes.ERROR_DESERIALIZE_INPUTS_FAILED.format(
+                exception=exception_message, traceback=traceback_str
+            )
 
-        # Any inputs that correspond to metadata ports were not part of the original function signature but were added
-        # by the process function decorator, so these have to be removed.
-        for key in [key for key, port in self.spec().inputs.items() if port.is_metadata]:
-            inputs.pop(key, None)
+        try:
+            results = self.func(**inputs)
+        except Exception as exception:
+            exception_message = str(exception)
+            traceback_str = traceback.format_exc()
+            return self.exit_codes.ERROR_FUNCTION_EXECUTION_FAILED.format(
+                exception=exception_message, traceback=traceback_str
+            )
+        return self.parse(results)
 
-        # The remaining inputs have to be keyword arguments.
-        kwargs.update(**inputs)
-        raw_args = [deserialize_to_raw_python_data(x, deserializers=self.deserializers) for x in args]
-        raw_kwargs = {k: deserialize_to_raw_python_data(v, deserializers=self.deserializers) for k, v in kwargs.items()}
+    def parse(self, results):
+        """Parse the results of the function."""
+        from aiida_pythonjob.utils import parse_outputs
 
-        results = self.func(*raw_args, **raw_kwargs)
-
-        # Read function_outputs specification
-        if "outputs" in self.inputs.function_data:
-            function_outputs = self.node.inputs.function_data.outputs.get_list()
-        else:
-            function_outputs = [{"name": "result"}]
-        self.output_list = function_outputs
-
-        # If nested outputs like "add_multiply.add", keep only top-level
-        top_level_output_list = [output for output in self.output_list if "." not in output["name"]]
-        if isinstance(results, tuple):
-            if len(top_level_output_list) != len(results):
-                return self.exit_codes.ERROR_RESULT_OUTPUT_MISMATCH
-            for i in range(len(top_level_output_list)):
-                top_level_output_list[i]["value"] = self.serialize_output(results[i], top_level_output_list[i])
-        elif isinstance(results, dict):
-            # pop the exit code if it exists inside the dictionary
-            exit_code = results.pop("exit_code", None)
-            if exit_code:
-                # If there's an exit_code, handle it (dict or int)
-                if isinstance(exit_code, dict):
-                    exit_code = ExitCode(exit_code["status"], exit_code["message"])
-                elif isinstance(exit_code, int):
-                    exit_code = ExitCode(exit_code)
-                if exit_code.status != 0:
-                    return exit_code
-            if len(top_level_output_list) == 1:
-                # User returned a single (nested) dict with AiiDA data nodes as values
-                if self.already_serialized(results):
-                    top_level_output_list = [{"name": key, "value": value} for key, value in results.items()]
-                elif top_level_output_list[0]["name"] in results:
-                    top_level_output_list[0]["value"] = self.serialize_output(
-                        results.pop(top_level_output_list[0]["name"]),
-                        top_level_output_list[0],
-                    )
-                    # If there are any extra keys in `results`, log a warning
-                    if len(results) > 0:
-                        self.logger.warning(
-                            f"Found extra results that are not included in the output: {results.keys()}"
-                        )
-                else:
-                    # Otherwise assume the entire dict is the single output
-                    top_level_output_list[0]["value"] = self.serialize_output(results, top_level_output_list[0])
-            elif len(top_level_output_list) > 1:
-                # Match each top-level output by name
-                for output in top_level_output_list:
-                    if output["name"] not in results:
-                        if output.get("required", True):
-                            return self.exit_codes.ERROR_MISSING_OUTPUT
-                    else:
-                        output["value"] = self.serialize_output(results.pop(output["name"]), output)
-                # Any remaining results are unaccounted for -> log a warning
-                if len(results) > 0:
-                    self.logger.warning(f"Found extra results that are not included in the output: {results.keys()}")
-        elif len(top_level_output_list) == 1:
-            # Single top-level output
-            # There are two cases:
-            # 1. The output as a whole will be serialized as the single output
-            # 2. The output is a mapping with already AiiDA data nodes as values, no need to serialize
-            if self.already_serialized(results):
-                top_level_output_list[0]["value"] = results
-            else:
-                top_level_output_list[0]["value"] = self.serialize_output(results, top_level_output_list[0])
-        else:
-            return self.exit_codes.ERROR_RESULT_OUTPUT_MISMATCH
+        self.output_ports = self.node.inputs.function_data.output_ports.get_dict()
+        exit_code = parse_outputs(
+            results,
+            output_ports=self.output_ports,
+            exit_codes=self.exit_codes,
+            logger=self.logger,
+            serializers=self.serializers,
+        )
+        if exit_code:
+            return exit_code
         # Store the outputs
-        for output in top_level_output_list:
+        for output in self.output_ports["ports"]:
             self.out(output["name"], output["value"])
 
         return ExitCode()
-
-    def already_serialized(self, results):
-        """Check if the results are already serialized."""
-        import collections
-
-        if isinstance(results, Data):
-            return True
-        elif isinstance(results, collections.abc.Mapping):
-            for value in results.values():
-                if not self.already_serialized(value):
-                    return False
-            return True
-        else:
-            return False
-
-    def find_output(self, name):
-        """Find the output spec with the given name."""
-        for output in self.output_list:
-            if output["name"] == name:
-                return output
-        return None
-
-    def serialize_output(self, result, output):
-        """Serialize outputs."""
-        from aiida_pythonjob.data.serializer import general_serializer
-
-        name = output["name"]
-        if output.get("identifier", "Any").upper() == "NAMESPACE":
-            if isinstance(result, dict):
-                serialized_result = {}
-                for key, value in result.items():
-                    full_name = f"{name}.{key}"
-                    full_name_output = self.find_output(full_name)
-                    if full_name_output and full_name_output.get("identifier", "Any").upper() == "NAMESPACE":
-                        serialized_result[key] = self.serialize_output(value, full_name_output)
-                    else:
-                        serialized_result[key] = general_serializer(value, serializers=self.serializers, store=False)
-                return serialized_result
-            else:
-                self.logger.error(f"Expected a dict for namespace '{name}', got {type(result)}.")
-                return self.exit_codes.ERROR_INVALID_OUTPUT
-        else:
-            return general_serializer(result, serializers=self.serializers, store=False)

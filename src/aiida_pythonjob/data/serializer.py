@@ -8,10 +8,10 @@ from typing import Any
 from aiida import common, orm
 
 from aiida_pythonjob.config import load_config
-from aiida_pythonjob.utils import import_from_path
 
 from .deserializer import all_deserializers
 from .pickled_data import PickledData
+from .utils import import_from_path
 
 
 def atoms_to_structure_data(structure):
