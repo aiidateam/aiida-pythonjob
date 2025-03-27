@@ -57,6 +57,10 @@ Source = "https://github.com/aiidateam/aiida-pythonjob"
 "pythonjob.builtins.bool" = "aiida.orm.nodes.data.bool:Bool"
 "pythonjob.builtins.list"="aiida_pythonjob.data.data_wrapper:List"
 "pythonjob.builtins.dict"="aiida_pythonjob.data.data_wrapper:Dict"
+"pythonjob.numpy.float32" = "aiida.orm.nodes.data.float:Float"
+"pythonjob.numpy.float64" = "aiida.orm.nodes.data.float:Float"
+"pythonjob.numpy.int64" = "aiida.orm.nodes.data.int:Int"
+"pythonjob.numpy.bool_" = "aiida.orm.nodes.data.bool:Bool"
 "pythonjob.numpy.ndarray"="aiida_pythonjob.data.data_wrapper:ArrayData"
 
 
