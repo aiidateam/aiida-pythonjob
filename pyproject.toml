@@ -48,14 +48,16 @@ docs = [
 Source = "https://github.com/aiidateam/aiida-pythonjob"
 
 [project.entry-points."aiida.data"]
+"pythonjob.jsonable_data" = "aiida_pythonjob.data.jsonable_data:JsonableData"
 "pythonjob.pickled_data" = "aiida_pythonjob.data.pickled_data:PickledData"
 "pythonjob.ase.atoms.Atoms" = "aiida_pythonjob.data.atoms:AtomsData"
 "pythonjob.builtins.int" = "aiida.orm.nodes.data.int:Int"
 "pythonjob.builtins.float" = "aiida.orm.nodes.data.float:Float"
 "pythonjob.builtins.str" = "aiida.orm.nodes.data.str:Str"
 "pythonjob.builtins.bool" = "aiida.orm.nodes.data.bool:Bool"
-"pythonjob.builtins.list"="aiida.orm.nodes.data.list:List"
-"pythonjob.builtins.dict"="aiida.orm.nodes.data.dict:Dict"
+"pythonjob.builtins.list"="aiida_pythonjob.data.data_wrapper:List"
+"pythonjob.builtins.dict"="aiida_pythonjob.data.data_wrapper:Dict"
+"pythonjob.numpy.ndarray"="aiida_pythonjob.data.data_wrapper:ArrayData"
 
 
 [project.entry-points."aiida.calculations"]

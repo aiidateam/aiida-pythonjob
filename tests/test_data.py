@@ -27,10 +27,18 @@ def test_typing():
 
 def test_python_job():
     """Test a simple python node."""
+    from aiida_pythonjob.config import config
     from aiida_pythonjob.data.pickled_data import PickledData
     from aiida_pythonjob.data.serializer import serialize_to_aiida_nodes
 
     inputs = {"a": 1, "b": 2.0, "c": set()}
+    with pytest.raises(
+        ValueError,
+        match="Cannot serialize type=set. No suitable method found",
+    ):
+        new_inputs = serialize_to_aiida_nodes(inputs)
+    # Allow pickling
+    config["allow_pickle"] = True
     new_inputs = serialize_to_aiida_nodes(inputs)
     assert isinstance(new_inputs["a"], aiida.orm.Int)
     assert isinstance(new_inputs["b"], aiida.orm.Float)
@@ -55,9 +63,9 @@ def test_only_data_with_value():
     # Test case: aiida.orm.ArrayData should raise a ValueError
     with pytest.raises(
         ValueError,
-        match="AiiDA data: aiida.orm.nodes.data.array.array.ArrayData, does not have a value attribute or deserializer.",  # noqa
+        match="AiiDA data: aiida.orm.nodes.data.array.xy.XyData, does not have a `value` attribute or deserializer.",
     ):
-        general_serializer(aiida.orm.ArrayData())
+        general_serializer(aiida.orm.XyData())
 
 
 def test_deserializer():

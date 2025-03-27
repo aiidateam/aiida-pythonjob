@@ -14,3 +14,6 @@ def load_config() -> dict:
     except FileNotFoundError:
         config = {}
     return config
+
+
+config = load_config()

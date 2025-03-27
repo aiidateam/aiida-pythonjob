@@ -7,10 +7,9 @@ from typing import Any
 
 from aiida import common, orm
 
-from aiida_pythonjob.config import load_config
+from aiida_pythonjob.data.jsonable_data import JsonableData
 
 from .deserializer import all_deserializers
-from .pickled_data import PickledData
 from .utils import import_from_path
 
 
@@ -40,12 +39,12 @@ def get_serializers_from_entry_points() -> dict:
 
 def get_serializers() -> dict:
     """Retrieve the serializer from the entry points."""
+    from aiida_pythonjob.config import config
     # import time
 
     # ts = time.time()
     all_serializers = {}
-    configs = load_config()
-    custom_serializers = configs.get("serializers", {})
+    custom_serializers = config.get("serializers", {})
     eps = get_serializers_from_entry_points()
     # check if there are duplicates
     for key, value in eps.items():
@@ -89,10 +88,19 @@ def general_serializer(
     data: Any,
     serializers: dict | None = None,
     deserializers: dict | None = None,
-    check_value=True,
-    store=True,
+    check_value: bool = True,
+    store: bool = True,
 ) -> orm.Node:
-    """Serialize the data to an AiiDA data node."""
+    """
+    Attempt to serialize the data to an AiiDA data node based on the preference from `config`:
+      1) AiiDA data only, 2) JSON-serializable, 3) fallback to PickledData (if allowed).
+    """
+    from aiida_pythonjob.config import config
+
+    # Merge user-provided config with defaults
+    allow_json = config.get("allow_json", True)
+    allow_pickle = config.get("allow_pickle", False)
+
     updated_deserializers = all_deserializers.copy()
     if deserializers is not None:
         updated_deserializers.update(deserializers)
@@ -101,43 +109,55 @@ def general_serializer(
     if serializers is not None:
         updated_serializers.update(serializers)
 
+    # 1) If it is already an AiiDA node, just return it
     if isinstance(data, orm.Data):
         if check_value and not hasattr(data, "value"):
             data_type = type(data)
             ep_key = f"{data_type.__module__}.{data_type.__name__}"
             if ep_key not in updated_deserializers:
-                raise ValueError(f"AiiDA data: {ep_key}, does not have a value attribute or deserializer.")
+                raise ValueError(f"AiiDA data: {ep_key}, does not have a `value` attribute or deserializer.")
         return data
     elif isinstance(data, common.extendeddicts.AttributeDict):
         # if the data is an AttributeDict, use it directly
         return data
-    # if is string with syntax {{}}, this is a port will read data from ctx
-    elif isinstance(data, str) and data.startswith("{{") and data.endswith("}}"):
-        return data
-    # if data is a class instance, get its __module__ and class name as a string
-    # for example, an Atoms will have ase.atoms.Atoms
-    else:
-        data = clean_dict_key(data)
-        # try to get the serializer from the entry points
-        data_type = type(data)
-        ep_key = f"{data_type.__module__}.{data_type.__name__}"
-        # search for the key in the entry points
-        if ep_key in updated_serializers:
-            try:
-                serializer = import_from_path(updated_serializers[ep_key])
-                new_node = serializer(data)
-                if store:
-                    new_node.store()
-                return new_node
-            except Exception:
-                error_traceback = traceback.format_exc()
-                raise ValueError(f"Error in serializing {ep_key}: {error_traceback}")
-        else:
-            # try to serialize the data as a PickledData
-            try:
-                new_node = PickledData(data)
-                if store:
-                    new_node.store()
-                return new_node
-            except Exception as e:
-                raise ValueError(f"Error in serializing {ep_key}: {e}")
+
+    # 3) check entry point
+    data_type = type(data)
+    ep_key = f"{data_type.__module__}.{data_type.__name__}"
+    if ep_key in updated_serializers:
+        try:
+            serializer = import_from_path(updated_serializers[ep_key])
+            new_node = serializer(data)
+            if store:
+                new_node.store()
+            return new_node
+        except Exception:
+            error_traceback = traceback.format_exc()
+            raise ValueError(f"Error in serializing {ep_key}: {error_traceback}")
+
+    #    check if we can JSON-serialize the data
+    if allow_json:
+        try:
+            node = JsonableData(data)
+            if store:
+                node.store()
+            return node
+        except (TypeError, ValueError):
+            print(f"Error in JSON-serializing {type(data).__name__}")
+
+    # fallback to pickling
+    if allow_pickle:
+        from .pickled_data import PickledData
+
+        try:
+            new_node = PickledData(data)
+            if store:
+                new_node.store()
+            return new_node
+        except Exception as e:
+            raise ValueError(f"Error in pickling {type(data).__name__}: {e}")
+
+    raise ValueError(
+        f"Cannot serialize type={type(data).__name__}. No suitable method found "
+        f"(json_allowed={allow_json}, pickle_allowed={allow_pickle})."
+    )

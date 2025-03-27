@@ -22,11 +22,12 @@ def create_mock_entry_points(entry_point_list):
         return {"aiida.data": entry_point_list}
 
 
-@patch("aiida_pythonjob.data.serializer.load_config")
 @patch("aiida_pythonjob.data.serializer.entry_points")
-def test_get_serializers(mock_entry_points, mock_load_config):
+def test_get_serializers(mock_entry_points):
     # Mock the configuration
-    mock_load_config.return_value = {"serializers": {}}
+    from aiida_pythonjob.config import config
+
+    config["serializers"] = {}
     # Mock entry points
     mock_ep_1 = create_entry_point("xyz.abc.Abc", "xyz.abc:AbcData", "aiida.data")
     mock_ep_2 = create_entry_point("xyz.abc.Bcd", "xyz.abc:BcdData", "aiida.data")
@@ -41,10 +42,8 @@ def test_get_serializers(mock_entry_points, mock_load_config):
     with pytest.raises(ValueError, match="Duplicate entry points for abc.Cde"):
         get_serializers()
     # Mock the configuration
-    mock_load_config.return_value = {
-        "serializers": {
-            "abc.Cde": "another_xyz.abc.CdeData",
-        }
+    config["serializers"] = {
+        "abc.Cde": "another_xyz.abc.CdeData",
     }
     result = get_serializers()
     # Assert results

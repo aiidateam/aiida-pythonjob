@@ -4,13 +4,12 @@ from typing import Any
 
 from aiida import common, orm
 
-from aiida_pythonjob.config import load_config
-
 from .utils import import_from_path
 
 builtin_deserializers = {
     "aiida.orm.nodes.data.list.List": "aiida_pythonjob.data.deserializer.list_data_to_list",
     "aiida.orm.nodes.data.dict.Dict": "aiida_pythonjob.data.deserializer.dict_data_to_dict",
+    "aiida.orm.nodes.data.array.array.ArrayData": "aiida_pythonjob.data.deserializer.array_data_to_array",
     "aiida.orm.nodes.data.structure.StructureData": "aiida_pythonjob.data.deserializer.structure_data_to_atoms",
 }
 
@@ -31,6 +30,10 @@ def dict_data_to_dict(data):
     return data.get_dict()
 
 
+def array_data_to_array(data):
+    return data.get_array()
+
+
 def structure_data_to_atoms(structure):
     return structure.get_ase()
 
@@ -41,8 +44,9 @@ def structure_data_to_pymatgen(structure):
 
 def get_deserializer() -> dict:
     """Retrieve the serializer from the entry points."""
-    configs = load_config()
-    custom_deserializers = configs.get("deserializers", {})
+    from aiida_pythonjob.config import config
+
+    custom_deserializers = config.get("deserializers", {})
     deserializers = builtin_deserializers.copy()
     deserializers.update(custom_deserializers)
     return deserializers
