@@ -143,7 +143,8 @@ def general_serializer(
                 node.store()
             return node
         except (TypeError, ValueError):
-            print(f"Error in JSON-serializing {type(data).__name__}")
+            # print(f"Error in JSON-serializing {type(data).__name__}")
+            pass
 
     # fallback to pickling
     if allow_pickle:
