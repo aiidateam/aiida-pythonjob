@@ -78,5 +78,7 @@ class PythonJobParser(Parser):
         except OSError:
             return self.exit_codes.ERROR_READING_OUTPUT_FILE
         except ValueError as exception:
-            self.logger.error(exception)
+            self.logger.error(
+                f"An error occurred when attempting to parse the output of the calculation: ValueError: {exception!s}"
+            )
             return self.exit_codes.ERROR_INVALID_OUTPUT
