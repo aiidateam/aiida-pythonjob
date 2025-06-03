@@ -476,6 +476,7 @@ def parse_outputs(
             for output in output_ports["ports"]:
                 if output["name"] not in results:
                     if output.get("required", True):
+                        logger.warning(f"Found output: {output['name']} not in results, but it is required.")
                         return exit_codes.ERROR_MISSING_OUTPUT
                 else:
                     output["value"] = serialize_ports(

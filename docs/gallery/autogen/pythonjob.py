@@ -280,6 +280,51 @@ for key, value in result["scaled_structures"].items():
 
 
 ######################################################################
+# --------------------------
+# Nested Namespace
+# --------------------------
+#
+# One can also define nested namespace outputs by specifying the "ports" parameter.
+
+
+def generate_structures(structure: Atoms, factor_lst: list) -> dict:
+    """Scale the structure by the given factor_lst."""
+    scaled_structures = {}
+    volumes = {}
+    for i in range(len(factor_lst)):
+        atoms = structure.copy()
+        atoms.set_cell(atoms.cell * factor_lst[i], scale_atoms=True)
+        scaled_structures[f"s_{i}"] = atoms
+        volumes[f"v_{i}"] = atoms.get_volume()
+    return {
+        "outputs": {
+            "scaled_structures": scaled_structures,
+            "volume": volumes,
+        }
+    }
+
+
+inputs = prepare_pythonjob_inputs(
+    generate_structures,
+    function_inputs={"structure": bulk("Al"), "factor_lst": [0.95, 1.0, 1.05]},
+    output_ports=[
+        {
+            "name": "outputs",
+            "identifier": "namespace",
+            "ports": [
+                {"name": "scaled_structures", "identifier": "namespace"},
+                {"name": "volume", "identifier": "namespace"},
+            ],
+        }
+    ],
+)
+
+result, node = run_get_node(PythonJob, inputs=inputs)
+print("result: ", result["outputs"]["scaled_structures"])
+print("volumes: ", result["outputs"]["volume"])
+
+
+######################################################################
 # What if my calculation fails?
 # --------------------------------
 #
