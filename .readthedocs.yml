@@ -12,6 +12,7 @@ build:
       - rabbitmq-server -detached
       - sleep 5
       - rabbitmq-diagnostics status
+      - pip list
       - verdi presto
       - verdi daemon start
       - verdi status
