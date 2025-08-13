@@ -24,6 +24,7 @@ dependencies = [
     "aiida-core>=2.3,<3",
     "ase",
     "cloudpickle",
+    "node-graph @ git+https://github.com/superstar54/node-graph.git@parse_definition_from_type_hint",
 ]
 
 [project.optional-dependencies]
