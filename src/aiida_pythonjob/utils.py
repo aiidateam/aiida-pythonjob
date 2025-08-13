@@ -498,3 +498,98 @@ def parse_outputs(
             )
     else:
         return exit_codes.ERROR_RESULT_OUTPUT_MISMATCH
+
+
+def is_namespace_type(tp: Any) -> bool:
+    """True if tp is a class created by spec.namespace/spec.dynamic (no hard import)."""
+    return isinstance(tp, type) and getattr(tp, "__ng_namespace__", False) is True
+
+
+def _unwrap_annotated(tp: Any) -> tuple[Any, dict]:
+    """If Annotated[T, SocketMeta(...)] used inside spec fields, return (T, meta_dict)."""
+    origin = getattr(tp, "__origin__", None)
+    if origin is not None and str(origin) == "typing.Annotated":
+        args = getattr(tp, "__args__", ())
+        if args:
+            base = args[0]
+            meta = {}
+            for m in args[1:]:
+                # duck-typing, avoid importing the actual class
+                if getattr(m, "__class__", None) and m.__class__.__name__ == "SocketMeta":
+                    if hasattr(m, "help"):
+                        meta["help"] = m.help
+                    if hasattr(m, "required"):
+                        meta["required"] = m.required
+            return base, meta
+    return tp, {}
+
+
+def spec_field_to_port(name: str, f_type: Any) -> Dict[str, Any]:
+    """Convert a single spec field to a port dict. Nested namespaces recurse."""
+    base_type, meta = _unwrap_annotated(f_type)
+    if is_namespace_type(base_type):
+        return {
+            "name": name,
+            "identifier": "NAMESPACE",
+            "ports": _spec_fields_to_ports(base_type),
+            **({"help": meta["help"]} if meta.get("help") else {}),
+        }
+    # leaf
+    port = {"name": name, "identifier": "ANY"}
+    if meta.get("help"):
+        port["help"] = meta["help"]
+    if "required" in meta and meta["required"] is not None:
+        port["required"] = bool(meta["required"])
+    return port
+
+
+def _spec_fields_to_ports(ns_type: type) -> List[Dict[str, Any]]:
+    """Expand the fixed fields of a spec namespace into a list of port dicts."""
+    fields: Dict[str, Any] = getattr(ns_type, "__ng_fields__", {}) or {}
+    defaults: Dict[str, Any] = getattr(ns_type, "__ng_defaults__", {}) or {}
+    ports: List[Dict[str, Any]] = []
+    for fname, ftype in fields.items():
+        port = spec_field_to_port(fname, ftype)
+        # infer required from defaults if not explicitly set by metadata
+        if "required" not in port:
+            port["required"] = fname not in defaults
+        # if you need to expose default values into schema, add here (optional)
+        ports.append(port)
+    return ports
+
+
+def spec_to_port_schema(spec_type: type, *, target: str) -> Dict[str, Any]:
+    """
+    Convert a spec type into the legacy dict schema:
+      { "name": "inputs"|"outputs", "identifier": "NAMESPACE", "ports": [...] }
+
+    Design:
+      - Static namespace → list of fixed ports (flattened)
+      - Dynamic (with optional fixed fields):
+          * For inputs: top-level NAMESPACE with those fixed ports (unknown keys allowed)
+          * For outputs: single top-level port "result" as NAMESPACE whose nested ports are the fixed ones.
+                         (parse_outputs will serialize entire dict under 'result' if user returns a dict)
+    """
+    if not is_namespace_type(spec_type):
+        raise TypeError("Spec must be a spec.namespace/spec.dynamic type")
+
+    is_dyn = bool(getattr(spec_type, "__ng_dynamic__", False))
+    fixed_ports = _spec_fields_to_ports(spec_type)
+
+    if target == "inputs":
+        # Allow unknown keys by design; serialize_ports handles unknown by treating as ANY.
+        return {"name": "inputs", "identifier": "NAMESPACE", "ports": fixed_ports}
+
+    if target == "outputs":
+        if not is_dyn:
+            # flatten fixed fields as individual outputs
+            return {"name": "outputs", "identifier": "NAMESPACE", "ports": fixed_ports}
+        else:
+            # dynamic: wrap everything under single 'result' namespace to capture arbitrary keys
+            return {
+                "name": "outputs",
+                "identifier": "NAMESPACE",
+                "ports": [{"name": "result", "identifier": "NAMESPACE", "ports": fixed_ports}],
+            }
+
+    raise ValueError("target must be 'inputs' or 'outputs'")

@@ -1,6 +1,7 @@
 from aiida import orm
 from aiida.engine import run_get_node
 from aiida_pythonjob import pyfunction
+from node_graph import spec
 
 
 def test_function_default_outputs(fixture_localhost):
@@ -17,12 +18,7 @@ def test_function_default_outputs(fixture_localhost):
 
 
 def test_output_tuple():
-    @pyfunction(
-        outputs=[
-            {"name": "sum"},
-            {"name": "diff"},
-        ]
-    )
+    @pyfunction(outputs=spec.namespace(sum=int, diff=int))
     def add(x, y):
         return x + y, x - y
 
@@ -35,12 +31,7 @@ def test_output_tuple():
 def test_function_custom_outputs():
     """Test decorator."""
 
-    @pyfunction(
-        outputs=[
-            {"name": "sum"},
-            {"name": "diff"},
-        ]
-    )
+    @pyfunction(outputs=spec.namespace(sum=int, diff=int))
     def add(x, y):
         return {"sum": x + y, "diff": x - y}
 
@@ -53,8 +44,8 @@ def test_function_custom_outputs():
 
 def test_function_custom_inputs_outputs():
     @pyfunction(
-        inputs=[{"name": "volumes", "identifier": "namespace"}, {"name": "energies", "identifier": "namespace"}],
-        outputs=[{"name": "volumes", "identifier": "namespace"}, {"name": "energies", "identifier": "namespace"}],
+        inputs=spec.namespace(volumes=spec.dynamic(any), energies=spec.dynamic(any)),
+        outputs=spec.namespace(volumes=spec.dynamic(any), energies=spec.dynamic(any)),
     )
     def plot_eos(volumes, energies):
         return {"volumes": volumes, "energies": energies}
@@ -75,7 +66,7 @@ def test_importable_function():
 def test_kwargs_inputs():
     """Test function with kwargs."""
 
-    @pyfunction(outputs=[{"name": "sum"}])
+    @pyfunction()
     def add(x, y=1, **kwargs):
         x += y
         for value in kwargs.values():
@@ -83,23 +74,20 @@ def test_kwargs_inputs():
         return x
 
     result, _ = run_get_node(add, x=1, y=2, a=3, b=4)
-    assert result["sum"].value == 10
+    assert result.value == 10
 
 
 def test_namespace_output():
     """Test function with namespace output and input."""
 
-    @pyfunction(
-        outputs=[
-            {
-                "name": "add_multiply",
-                "identifier": "namespace",
-                "ports": [{"name": "add", "identifier": "namespace"}, "multiply"],
-            },
-            {"name": "minus"},
-        ]
+    out = spec.namespace(
+        add_multiply=spec.namespace(add=spec.dynamic(any), multiply=any),
+        minus=any,
     )
+
+    @pyfunction(outputs=out)
     def myfunc(x, y):
+        """Function that returns a namespace output."""
         add = {"order1": x + y, "order2": x * x + y * y}
         return {
             "add_multiply": {"add": add, "multiply": x * y},
@@ -129,14 +117,10 @@ def test_override_outputs():
         myfunc,
         x=1,
         y=2,
-        output_ports=[
-            {
-                "name": "add_multiply",
-                "identifier": "namespace",
-                "ports": [{"name": "add", "identifier": "namespace"}],
-            },
-            {"name": "minus"},
-        ],
+        outputs_spec=spec.namespace(
+            add_multiply=spec.namespace(add=spec.dynamic(any), multiply=any),
+            minus=any,
+        ),
     )
 
     assert result["add_multiply"]["add"]["order1"].value == 3
@@ -185,12 +169,7 @@ def test_aiida_node_as_inputs_outputs():
 
 
 def test_missing_output():
-    @pyfunction(
-        outputs=[
-            {"name": "sum"},
-            {"name": "diff"},
-        ]
-    )
+    @pyfunction(outputs=spec.namespace(sum=int, diff=int))
     def add(x, y):
         return {"sum": x + y}
 
@@ -202,44 +181,16 @@ def test_missing_output():
 def test_nested_inputs_outputs():
     """Test function with nested inputs and outputs."""
 
-    @pyfunction(
-        inputs=[
-            {
-                "name": "input1",
-                "identifier": "namespace",
-                "ports": [
-                    {"name": "x1"},
-                    {"name": "y1"},
-                ],
-            },
-            {
-                "name": "input1",
-                "identifier": "namespace",
-                "ports": [
-                    {"name": "x2"},
-                    {"name": "y2"},
-                ],
-            },
-        ],
-        outputs=[
-            {
-                "name": "result1",
-                "identifier": "namespace",
-                "ports": [
-                    {"name": "sum1"},
-                    {"name": "diff1"},
-                ],
-            },
-            {
-                "name": "result2",
-                "identifier": "namespace",
-                "ports": [
-                    {"name": "sum2"},
-                    {"name": "diff2"},
-                ],
-            },
-        ],
+    inp = spec.namespace(
+        input1=spec.namespace(x1=int, y1=int),
+        input2=spec.namespace(x2=int, y2=int),
     )
+    out = spec.namespace(
+        result1=spec.namespace(sum1=int, diff1=int),
+        result2=spec.namespace(sum2=int, diff2=int),
+    )
+
+    @pyfunction(inputs=inp, outputs=out)
     def add(input1, input2):
         return {
             "result1": {"sum1": input1["x"] + input1["y"], "diff1": input1["x"] - input1["y"]},

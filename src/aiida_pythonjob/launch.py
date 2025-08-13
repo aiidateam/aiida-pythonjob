@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import os
+import warnings
 from typing import Any, Callable, Dict, List, Optional, Union
 
 from aiida import orm
@@ -17,8 +18,12 @@ from .utils import (
 def prepare_pythonjob_inputs(
     function: Optional[Callable[..., Any]] = None,
     function_inputs: Optional[Dict[str, Any]] = None,
+    # OLD (deprecated) schema args:
     input_ports: Optional[List[str | dict]] = None,
     output_ports: Optional[List[str | dict]] = None,
+    # NEW typed specs:
+    inputs_spec: Optional[type] = None,
+    outputs_spec: Optional[type] = None,
     code: Optional[orm.AbstractCode] = None,
     command_info: Optional[Dict[str, str]] = None,
     computer: Union[str, orm.Computer] = "localhost",
@@ -32,7 +37,7 @@ def prepare_pythonjob_inputs(
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """Prepare the inputs for PythonJob"""
-    from .utils import serialize_ports
+    from .utils import is_namespace_type, serialize_ports, spec_to_port_schema
 
     if function is None and function_data is None:
         raise ValueError("Either function or function_data must be provided")
@@ -62,16 +67,46 @@ def prepare_pythonjob_inputs(
     if code is None:
         command_info = command_info or {}
         code = get_or_create_code(computer=computer, **command_info)
-    output_ports = output_ports or [{"name": "result"}]
-    output_ports = {"name": "outputs", "identifier": "namespace", "ports": output_ports or [{"name": "result"}]}
-    input_ports = {"name": "inputs", "identifier": "namespace", "ports": input_ports or []}
-    input_ports = format_input_output_ports(input_ports)
-    input_ports = build_input_port_definitions(func=function, input_ports=input_ports)
-    function_data["output_ports"] = format_input_output_ports(output_ports)
-    function_data["input_ports"] = input_ports
-    # serialize the kwargs into AiiDA Data
+    # --- outputs schema ---
+    if outputs_spec is not None:
+        if not is_namespace_type(outputs_spec):
+            raise TypeError("outputs_spec must be a spec.namespace/spec.dynamic type")
+        output_ports_schema = spec_to_port_schema(outputs_spec, target="outputs")
+    else:
+        if output_ports is not None:
+            warnings.warn(
+                "output_ports (dict-based) is deprecated; use outputs_spec=spec.namespace(...) or spec.dynamic(...)",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        # legacy default: single result
+        output_ports_schema = {"name": "outputs", "identifier": "NAMESPACE", "ports": [{"name": "result"}]}
+
+    # --- inputs schema ---
+    if inputs_spec is not None:
+        if not is_namespace_type(inputs_spec):
+            raise TypeError("inputs_spec must be a spec.namespace/spec.dynamic type")
+        input_ports_schema = spec_to_port_schema(inputs_spec, target="inputs")
+    else:
+        if input_ports is not None:
+            warnings.warn(
+                "input_ports (dict-based) is deprecated; use inputs_spec=spec.namespace(...) or spec.dynamic(...)",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        # legacy path: build from signature + legacy formatters
+        input_ports_schema = {"name": "inputs", "identifier": "NAMESPACE", "ports": input_ports or []}
+        input_ports_schema = format_input_output_ports(input_ports_schema)
+        input_ports_schema = build_input_port_definitions(func=function, input_ports=input_ports_schema)
+
+    function_data["output_ports"] = format_input_output_ports(output_ports_schema)
+    function_data["input_ports"] = input_ports_schema
+    ...
+    # serialize kwargs against the (nested) input schema
     function_inputs = function_inputs or {}
-    function_inputs = serialize_ports(python_data=function_inputs, port_schema=input_ports, serializers=serializers)
+    function_inputs = serialize_ports(
+        python_data=function_inputs, port_schema=input_ports_schema, serializers=serializers
+    )
     # replace "." with "__dot__" in the keys of a dictionary
     if deserializers:
         deserializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in deserializers.items()})
@@ -112,8 +147,12 @@ def create_inputs(func, *args: Any, **kwargs: Any) -> dict[str, Any]:
 def prepare_pyfunction_inputs(
     function: Optional[Callable[..., Any]] = None,
     function_inputs: Optional[Dict[str, Any]] = None,
+    # OLD (deprecated)
     input_ports: Optional[List[str | dict]] = None,
     output_ports: Optional[List[str | dict]] = None,
+    # NEW
+    inputs_spec: Optional[type] = None,
+    outputs_spec: Optional[type] = None,
     metadata: Optional[Dict[str, Any]] = None,
     process_label: Optional[str] = None,
     function_data: dict | None = None,
@@ -125,7 +164,7 @@ def prepare_pyfunction_inputs(
     """Prepare the inputs for PythonJob"""
     import types
 
-    from .utils import serialize_ports
+    from .utils import is_namespace_type, serialize_ports, spec_to_port_schema
 
     if function is None and function_data is None:
         raise ValueError("Either function or function_data must be provided")
@@ -139,15 +178,42 @@ def prepare_pyfunction_inputs(
             raise NotImplementedError("Built-in functions are not supported yet")
         else:
             raise ValueError("Invalid function type")
-    output_ports = {"name": "outputs", "identifier": "namespace", "ports": output_ports or [{"name": "result"}]}
-    input_ports = {"name": "inputs", "identifier": "namespace", "ports": input_ports or []}
-    input_ports = format_input_output_ports(input_ports)
-    input_ports = build_input_port_definitions(func=function, input_ports=input_ports)
-    function_data["output_ports"] = format_input_output_ports(output_ports)
-    function_data["input_ports"] = input_ports
+    if outputs_spec is not None:
+        if not is_namespace_type(outputs_spec):
+            raise TypeError("outputs_spec must be a spec.namespace/spec.dynamic type")
+        output_ports_schema = spec_to_port_schema(outputs_spec, target="outputs")
+    else:
+        if output_ports is not None:
+            warnings.warn(
+                "output_ports (dict-based) is deprecated; use outputs_spec=spec.namespace(...) or spec.dynamic(...)",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        output_ports_schema = {"name": "outputs", "identifier": "NAMESPACE", "ports": [{"name": "result"}]}
+
+    # --- inputs schema ---
+    if inputs_spec is not None:
+        if not is_namespace_type(inputs_spec):
+            raise TypeError("inputs_spec must be a spec.namespace/spec.dynamic type")
+        input_ports_schema = spec_to_port_schema(inputs_spec, target="inputs")
+    else:
+        if input_ports is not None:
+            warnings.warn(
+                "input_ports (dict-based) is deprecated; use inputs_spec=spec.namespace(...) or spec.dynamic(...)",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        input_ports_schema = {"name": "inputs", "identifier": "NAMESPACE", "ports": input_ports or []}
+        input_ports_schema = format_input_output_ports(input_ports_schema)
+        input_ports_schema = build_input_port_definitions(func=function, input_ports=input_ports_schema)
+
+    function_data["output_ports"] = format_input_output_ports(output_ports_schema)
+    function_data["input_ports"] = input_ports_schema
     # serialize the kwargs into AiiDA Data
     function_inputs = function_inputs or {}
-    function_inputs = serialize_ports(python_data=function_inputs, port_schema=input_ports, serializers=serializers)
+    function_inputs = serialize_ports(
+        python_data=function_inputs, port_schema=input_ports_schema, serializers=serializers
+    )
     # replace "." with "__dot__" in the keys of a dictionary
     if deserializers:
         deserializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in deserializers.items()})

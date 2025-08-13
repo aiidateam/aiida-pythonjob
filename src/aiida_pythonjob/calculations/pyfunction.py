@@ -34,7 +34,7 @@ class PyFunction(Process):
     def func(self) -> t.Callable[..., t.Any]:
         import cloudpickle
 
-        if self._func is None:
+        if not getattr(self, "_func", None):
             self._func = cloudpickle.loads(self.inputs.function_data.pickled_function)
         return self._func
 
@@ -179,6 +179,7 @@ class PyFunction(Process):
         from aiida_pythonjob.utils import parse_outputs
 
         self.output_ports = self.node.inputs.function_data.output_ports.get_dict()
+        print("Output ports:", self.output_ports)
         exit_code = parse_outputs(
             results,
             output_ports=self.output_ports,
