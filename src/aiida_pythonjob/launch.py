@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import inspect
 import os
-import warnings
 from typing import Any, Callable, Dict, List, Optional, Union
 
 from aiida import orm
 
 from .utils import (
     build_function_data,
-    build_input_port_definitions,
     format_input_output_ports,
     get_or_create_code,
 )
@@ -18,10 +16,6 @@ from .utils import (
 def prepare_pythonjob_inputs(
     function: Optional[Callable[..., Any]] = None,
     function_inputs: Optional[Dict[str, Any]] = None,
-    # OLD (deprecated) schema args:
-    input_ports: Optional[List[str | dict]] = None,
-    output_ports: Optional[List[str | dict]] = None,
-    # NEW typed specs:
     inputs_spec: Optional[type] = None,
     outputs_spec: Optional[type] = None,
     code: Optional[orm.AbstractCode] = None,
@@ -73,13 +67,6 @@ def prepare_pythonjob_inputs(
             raise TypeError("outputs_spec must be a spec.namespace/spec.dynamic type")
         output_ports_schema = spec_to_port_schema(outputs_spec, target="outputs")
     else:
-        if output_ports is not None:
-            warnings.warn(
-                "output_ports (dict-based) is deprecated; use outputs_spec=spec.namespace(...) or spec.dynamic(...)",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-        # legacy default: single result
         output_ports_schema = {"name": "outputs", "identifier": "NAMESPACE", "ports": [{"name": "result"}]}
 
     # --- inputs schema ---
@@ -88,20 +75,10 @@ def prepare_pythonjob_inputs(
             raise TypeError("inputs_spec must be a spec.namespace/spec.dynamic type")
         input_ports_schema = spec_to_port_schema(inputs_spec, target="inputs")
     else:
-        if input_ports is not None:
-            warnings.warn(
-                "input_ports (dict-based) is deprecated; use inputs_spec=spec.namespace(...) or spec.dynamic(...)",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-        # legacy path: build from signature + legacy formatters
-        input_ports_schema = {"name": "inputs", "identifier": "NAMESPACE", "ports": input_ports or []}
-        input_ports_schema = format_input_output_ports(input_ports_schema)
-        input_ports_schema = build_input_port_definitions(func=function, input_ports=input_ports_schema)
+        input_ports_schema = {"name": "inputs", "identifier": "NAMESPACE", "ports": []}
 
     function_data["output_ports"] = format_input_output_ports(output_ports_schema)
     function_data["input_ports"] = input_ports_schema
-    ...
     # serialize kwargs against the (nested) input schema
     function_inputs = function_inputs or {}
     function_inputs = serialize_ports(
@@ -183,12 +160,6 @@ def prepare_pyfunction_inputs(
             raise TypeError("outputs_spec must be a spec.namespace/spec.dynamic type")
         output_ports_schema = spec_to_port_schema(outputs_spec, target="outputs")
     else:
-        if output_ports is not None:
-            warnings.warn(
-                "output_ports (dict-based) is deprecated; use outputs_spec=spec.namespace(...) or spec.dynamic(...)",
-                DeprecationWarning,
-                stacklevel=2,
-            )
         output_ports_schema = {"name": "outputs", "identifier": "NAMESPACE", "ports": [{"name": "result"}]}
 
     # --- inputs schema ---
@@ -197,15 +168,7 @@ def prepare_pyfunction_inputs(
             raise TypeError("inputs_spec must be a spec.namespace/spec.dynamic type")
         input_ports_schema = spec_to_port_schema(inputs_spec, target="inputs")
     else:
-        if input_ports is not None:
-            warnings.warn(
-                "input_ports (dict-based) is deprecated; use inputs_spec=spec.namespace(...) or spec.dynamic(...)",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-        input_ports_schema = {"name": "inputs", "identifier": "NAMESPACE", "ports": input_ports or []}
-        input_ports_schema = format_input_output_ports(input_ports_schema)
-        input_ports_schema = build_input_port_definitions(func=function, input_ports=input_ports_schema)
+        input_ports_schema = {"name": "inputs", "identifier": "NAMESPACE", "ports": []}
 
     function_data["output_ports"] = format_input_output_ports(output_ports_schema)
     function_data["input_ports"] = input_ports_schema
