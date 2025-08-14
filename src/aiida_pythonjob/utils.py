@@ -271,137 +271,80 @@ def format_input_output_ports(data):
     return data
 
 
-def build_input_port_definitions(
-    func,
-    input_ports: Optional[List[Dict[str, Any]]] = None,
-) -> List[Dict[str, Any]]:
-    """
-    Build a list of port definitions from a function signature, then merge
-    user-defined ports that may override or add to them.
-
-    Return: A list of dicts, each at least has:
-      - "name":  str
-      - "identifier": str   (e.g. "ANY" or "NAMESPACE")
-      - possibly other keys like "required", etc.
-    """
-    import inspect
-
-    signature = inspect.signature(func)
-    default_ports = []
-
-    for param_name, param in signature.parameters.items():
-        if param.kind in (
-            inspect.Parameter.POSITIONAL_ONLY,
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            inspect.Parameter.KEYWORD_ONLY,
-        ):
-            default_ports.append(
-                {"name": param_name, "identifier": "ANY", "required": param.default is inspect.Parameter.empty}
-            )
-        elif param.kind == inspect.Parameter.VAR_POSITIONAL:
-            # This is *args
-            raise NotImplementedError("Variable positional arguments are not yet supported")
-        elif param.kind == inspect.Parameter.VAR_KEYWORD:
-            # This is **kwargs
-            default_ports.append({"name": param_name, "identifier": "NAMESPACE", "required": False})
-        else:
-            raise ValueError(f"Unsupported parameter kind: {param.kind}")
-
-    # Now merge in user-defined overrides or additions
-    user_defined_ports = input_ports.get("ports", []) if input_ports else []
-
-    # Convert default list to a dict by name for easy merging
-    merged_dict = {port["name"]: port for port in default_ports}
-    for user_port in user_defined_ports:
-        name = user_port["name"]
-        merged_dict[name] = {**merged_dict.get(name, {}), **user_port}
-
-    # Return the final merged list
-    input_ports["ports"] = list(merged_dict.values())
-    return input_ports
-
-
 def serialize_ports(
-    python_data: Dict[str, Any],
+    python_data: Any,
     port_schema: Dict[str, Any],
     serializers: Optional[Dict[str, str]] = None,
-) -> Dict[str, Any]:
-    """
-    Convert a raw Python dictionary of user inputs into a dictionary of AiiDA nodes,
-    according to a nested port_schema.
-
-    :param python_data:   The actual user data, e.g. {"my_namespace": {...}, "some_other_port": ...}.
-    :param port_schema:   A dict of port definition, may contain sub ports with each is a dict with at least:
-                          { "name": <str>, "identifier": "ANY" or "NAMESPACE", ... }
-                          If NAMESPACE, it may have "ports": <list of nested port definitions>.
-    :param serializers:   (Optional) custom mapping for specialized serialization.
-
-    :return: A dictionary with the same structure, but with AiiDA nodes (or nested dicts)
-             instead of raw Python values.
-    """
+) -> Any:
     from aiida_pythonjob.data.serializer import general_serializer
 
-    if port_schema["identifier"].upper() == "NAMESPACE":
-        name = port_schema["name"]
-        if not isinstance(python_data, dict):
-            raise ValueError(f"Expected dict for namespace '{name}', got {type(python_data)}")
-        # Convert schema into a dict keyed by port name for convenience.
-        sub_port_map = {p["name"]: p for p in port_schema.get("ports", [])}
-        result = {}
-        for name, value in python_data.items():
-            sub_port = sub_port_map.get(name, {})
-            port_id = sub_port.get("identifier", "ANY").upper()
-            if port_id == "NAMESPACE":
-                result[name] = serialize_ports(value, sub_port, serializers=serializers)
+    if port_schema["identifier"].upper() != "NAMESPACE":
+        return general_serializer(python_data, serializers=serializers, store=False)
 
+    # Namespace
+    name = port_schema.get("name", "<namespace>")
+    if not isinstance(python_data, dict):
+        raise ValueError(f"Expected dict for namespace '{name}', got {type(python_data)}")
+
+    sub_ports: Dict[str, Dict[str, Any]] = port_schema.get("ports", {}) or {}
+    is_dyn = bool(port_schema.get("dynamic"))
+    item_schema = port_schema.get("item") if is_dyn else None
+
+    out: Dict[str, Any] = {}
+    for key, value in python_data.items():
+        if key in sub_ports:
+            sub = sub_ports[key]
+            if sub.get("identifier", "ANY").upper() == "NAMESPACE":
+                out[key] = serialize_ports(value, sub, serializers=serializers)
             else:
-                serialized = general_serializer(value, serializers=serializers, store=False)
-                result[name] = serialized
-    else:
-        serialized = general_serializer(python_data, serializers=serializers, store=False)
-        result = serialized
+                out[key] = general_serializer(value, serializers=serializers, store=False)
+        elif is_dyn and item_schema is not None:
+            if item_schema.get("identifier", "ANY").upper() == "NAMESPACE":
+                out[key] = serialize_ports(value, item_schema, serializers=serializers)
+            else:
+                out[key] = general_serializer(value, serializers=serializers, store=False)
+        else:
+            raise ValueError(f"Unexpected key '{key}' for namespace '{name}' (not dynamic).")
 
-    return result
+    return out
 
 
 def deserialize_ports(
-    serialized_data: Dict[str, Any],
+    serialized_data: Any,
     port_schema: Dict[str, Any],
     deserializers: Optional[Dict[str, str]] = None,
-) -> Dict[str, Any]:
-    """
-    Convert a dictionary of AiiDA data nodes (or nested dicts) back into raw Python objects,
-    according to the same nested port_schema.
-
-    :param serialized_data: The data stored in AiiDA, e.g.
-                            { "my_namespace": { "foo": <Int>, "bar": { "baz": <List> } }, ... }
-    :param port_schema:     The same schema that was used to serialize.
-    :param deserializers:   (Optional) custom mapping for specialized deserialization.
-
-    :return: A dictionary of raw Python values.
-    """
+) -> Any:
     from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
 
-    if port_schema["identifier"].upper() == "NAMESPACE":
-        name = port_schema["name"]
-        if not isinstance(serialized_data, dict):
-            raise ValueError(f"Expected dict for namespace '{name}', got {type(serialized_data)}")
-        sub_port_map = {p["name"]: p for p in port_schema.get("ports", [])}
-        result = {}
-        for name, node_or_subdict in serialized_data.items():
-            sub_port = sub_port_map.get(name, {})
-            port_id = sub_port.get("identifier", "ANY").upper()
+    if port_schema["identifier"].upper() != "NAMESPACE":
+        return deserialize_to_raw_python_data(serialized_data, deserializers=deserializers)
 
-            if port_id == "NAMESPACE":
-                result[name] = deserialize_ports(node_or_subdict, sub_port, deserializers=deserializers)
+    # Namespace
+    name = port_schema.get("name", "<namespace>")
+    if not isinstance(serialized_data, dict):
+        raise ValueError(f"Expected dict for namespace '{name}', got {type(serialized_data)}")
+
+    sub_ports: Dict[str, Dict[str, Any]] = port_schema.get("ports", {}) or {}
+    is_dyn = bool(port_schema.get("dynamic"))
+    item_schema = port_schema.get("item") if is_dyn else None
+
+    out: Dict[str, Any] = {}
+    for key, value in serialized_data.items():
+        if key in sub_ports:
+            sub = sub_ports[key]
+            if sub.get("identifier", "ANY").upper() == "NAMESPACE":
+                out[key] = deserialize_ports(value, sub, deserializers=deserializers)
             else:
-                raw_value = deserialize_to_raw_python_data(node_or_subdict, deserializers=deserializers)
-                result[name] = raw_value
-    else:
-        raw_value = deserialize_to_raw_python_data(serialized_data, deserializers=deserializers)
-        result = raw_value
+                out[key] = deserialize_to_raw_python_data(value, deserializers=deserializers)
+        elif is_dyn and item_schema is not None:
+            if item_schema.get("identifier", "ANY").upper() == "NAMESPACE":
+                out[key] = deserialize_ports(value, item_schema, deserializers=deserializers)
+            else:
+                out[key] = deserialize_to_raw_python_data(value, deserializers=deserializers)
+        else:
+            raise ValueError(f"Unexpected key '{key}' for namespace '{name}' (not dynamic).")
 
-    return result
+    return out
 
 
 def already_serialized(results):
@@ -421,6 +364,10 @@ def already_serialized(results):
         return False
 
 
+def _ordered_port_names(ports: Dict[str, Dict[str, Any]]) -> List[str]:
+    return list(ports.keys())  # insertion order (Py3.7+)
+
+
 def parse_outputs(
     results: Any,
     output_ports: Dict[str, Any],
@@ -428,80 +375,70 @@ def parse_outputs(
     logger,
     serializers: Optional[Dict[str, str]] = None,
 ) -> Union[Dict[str, Any], ExitCode]:
-    """
-    Parse the "results" returned from a function or loaded from file,
-    given a schema of 'output_ports'."
-    """
+    """Populate output_ports['ports'][name]['value'] from results based on schema."""
+    ports: Dict[str, Dict[str, Any]] = output_ports.get("ports", {}) or {}
 
-    # Read output_ports specification
-
+    # tuple -> map by order of port names
     if isinstance(results, tuple):
-        if len(output_ports["ports"]) != len(results):
+        names = _ordered_port_names(ports)
+        if len(names) != len(results):
             return exit_codes.ERROR_RESULT_OUTPUT_MISMATCH
-        for i in range(len(output_ports["ports"])):
-            output_ports["ports"][i]["value"] = serialize_ports(
-                python_data=results[i], port_schema=output_ports["ports"][i], serializers=serializers
-            )
-    elif isinstance(results, dict):
-        # pop the exit code if it exists inside the dictionary
+        for i, name in enumerate(names):
+            port = ports[name]
+            port["value"] = serialize_ports(results[i], port, serializers=serializers)
+        return None
+
+    # dict
+    if isinstance(results, dict):
+        # handle optional inline exit code
         exit_code = results.pop("exit_code", None)
         if exit_code:
-            # If there's an exit_code, handle it (dict or int)
             if isinstance(exit_code, dict):
                 exit_code = ExitCode(exit_code["status"], exit_code["message"])
             elif isinstance(exit_code, int):
                 exit_code = ExitCode(exit_code)
             if exit_code.status != 0:
                 return exit_code
-        if len(output_ports["ports"]) == 1:
-            # User returned a single (nested) dict with AiiDA data nodes as values
-            if already_serialized(results):
-                output_ports["ports"] = [{"name": key, "value": value} for key, value in results.items()]
-            elif output_ports["ports"][0]["name"] in results:
-                output_ports["ports"][0]["value"] = serialize_ports(
-                    python_data=results.pop(output_ports["ports"][0]["name"]),
-                    port_schema=output_ports["ports"][0],
-                    serializers=serializers,
-                )
-                # If there are any extra keys in `results`, log a warning
-                if len(results) > 0:
-                    logger.warning(f"Found extra results that are not included in the output: {results.keys()}")
+
+        if len(ports) == 1:
+            # single output:
+            # - if user used the same key as port name, use that value;
+            # - else treat the entire dict as the value for that single port.
+            ((only_name, only_port),) = ports.items()
+            if only_name in results:
+                only_port["value"] = serialize_ports(results.pop(only_name), only_port, serializers=serializers)
+                if results:
+                    logger.warning(f"Extra results ignored: {list(results.keys())}")
             else:
-                # Otherwise assume the entire dict is the single output
-                output_ports["ports"][0]["value"] = serialize_ports(
-                    python_data=results, port_schema=output_ports["ports"][0], serializers=serializers
-                )
-        elif len(output_ports["ports"]) > 1:
-            # Match each top-level output by name
-            for output in output_ports["ports"]:
-                if output["name"] not in results:
-                    if output.get("required", True):
-                        logger.warning(f"Found output: {output['name']} not in results, but it is required.")
-                        return exit_codes.ERROR_MISSING_OUTPUT
-                else:
-                    output["value"] = serialize_ports(
-                        python_data=results.pop(output["name"]), port_schema=output, serializers=serializers
-                    )
-            # Any remaining results are unaccounted for -> log a warning
-            if len(results) > 0:
-                logger.warning(f"Found extra results that are not included in the output: {results.keys()}")
-    elif len(output_ports["ports"]) == 1:
-        # Single top-level output
-        # There are two cases:
-        # 1. The output as a whole will be serialized as the single output
-        # 2. The output is a mapping with already AiiDA data nodes as values, no need to serialize
-        if already_serialized(results):
-            output_ports["ports"][0]["value"] = results
-        else:
-            output_ports["ports"][0]["value"] = serialize_ports(
-                python_data=results, port_schema=output_ports["ports"][0], serializers=serializers
-            )
-    else:
-        return exit_codes.ERROR_RESULT_OUTPUT_MISMATCH
+                only_port["value"] = serialize_ports(results, only_port, serializers=serializers)
+            return None
+
+        # multi output: match by name
+        for name, port in ports.items():
+            if name not in results:
+                if port.get("required", True):
+                    logger.warning(f"Missing required output: {name}")
+                    return exit_codes.ERROR_MISSING_OUTPUT
+                continue
+            port["value"] = serialize_ports(results.pop(name), port, serializers=serializers)
+        if results:
+            logger.warning(f"Extra results ignored: {list(results.keys())}")
+        return None
+
+    # single output + non-dict/tuple
+    if len(ports) == 1:
+        ((only_name, only_port),) = ports.items()
+        only_port["value"] = serialize_ports(results, only_port, serializers=serializers)
+        return None
+
+    return exit_codes.ERROR_RESULT_OUTPUT_MISMATCH
+
+
+# --- spec helpers (typed spec → dict schema) ---------------------------------
 
 
 def is_namespace_type(tp: Any) -> bool:
-    """True if tp is a class created by spec.namespace/spec.dynamic (no hard import)."""
+    """True if tp is class created by spec.namespace/spec.dynamic (no hard import)."""
     return isinstance(tp, type) and getattr(tp, "__ng_namespace__", False) is True
 
 
@@ -514,7 +451,6 @@ def _unwrap_annotated(tp: Any) -> tuple[Any, dict]:
             base = args[0]
             meta = {}
             for m in args[1:]:
-                # duck-typing, avoid importing the actual class
                 if getattr(m, "__class__", None) and m.__class__.__name__ == "SocketMeta":
                     if hasattr(m, "help"):
                         meta["help"] = m.help
@@ -529,13 +465,13 @@ def spec_field_to_port(name: str, f_type: Any) -> Dict[str, Any]:
     base_type, meta = _unwrap_annotated(f_type)
     if is_namespace_type(base_type):
         return {
-            "name": name,
             "identifier": "NAMESPACE",
             "ports": _spec_fields_to_ports(base_type),
             **({"help": meta["help"]} if meta.get("help") else {}),
+            **({"required": bool(meta["required"])} if "required" in meta and meta["required"] is not None else {}),
         }
     # leaf
-    port = {"name": name, "identifier": "ANY"}
+    port = {"identifier": "ANY"}
     if meta.get("help"):
         port["help"] = meta["help"]
     if "required" in meta and meta["required"] is not None:
@@ -543,53 +479,75 @@ def spec_field_to_port(name: str, f_type: Any) -> Dict[str, Any]:
     return port
 
 
-def _spec_fields_to_ports(ns_type: type) -> List[Dict[str, Any]]:
-    """Expand the fixed fields of a spec namespace into a list of port dicts."""
+def _spec_fields_to_ports(ns_type: type) -> Dict[str, Dict[str, Any]]:
+    """Expand fixed fields of a spec namespace into an ordered dict of port dicts."""
     fields: Dict[str, Any] = getattr(ns_type, "__ng_fields__", {}) or {}
     defaults: Dict[str, Any] = getattr(ns_type, "__ng_defaults__", {}) or {}
-    ports: List[Dict[str, Any]] = []
+    ports: Dict[str, Dict[str, Any]] = {}
     for fname, ftype in fields.items():
         port = spec_field_to_port(fname, ftype)
-        # infer required from defaults if not explicitly set by metadata
         if "required" not in port:
             port["required"] = fname not in defaults
-        # if you need to expose default values into schema, add here (optional)
-        ports.append(port)
+        ports[fname] = port
     return ports
+
+
+def _spec_to_port_object(spec_type: type) -> Dict[str, Any]:
+    """Convert a spec.namespace/spec.dynamic type to a port object (no name)."""
+    if not is_namespace_type(spec_type):
+        raise TypeError("spec_type must be a spec.namespace/spec.dynamic type")
+
+    is_dyn = bool(getattr(spec_type, "__ng_dynamic__", False))
+    fields = _spec_fields_to_ports(spec_type)
+
+    obj: Dict[str, Any] = {"identifier": "NAMESPACE", "ports": fields}
+
+    if is_dyn:
+        item_type = getattr(spec_type, "__ng_item_type__", None)
+        if item_type is None:
+            item_obj = {"identifier": "ANY"}
+        elif is_namespace_type(item_type):
+            item_obj = _spec_to_port_object(item_type)
+        else:
+            item_obj = {"identifier": "ANY"}
+        obj["dynamic"] = True
+        obj["item"] = item_obj
+
+    return obj
 
 
 def spec_to_port_schema(spec_type: type, *, target: str) -> Dict[str, Any]:
     """
-    Convert a spec type into the legacy dict schema:
-      { "name": "inputs"|"outputs", "identifier": "NAMESPACE", "ports": [...] }
+    Convert a spec type into dict schema:
 
-    Design:
-      - Static namespace → list of fixed ports (flattened)
-      - Dynamic (with optional fixed fields):
-          * For inputs: top-level NAMESPACE with those fixed ports (unknown keys allowed)
-          * For outputs: single top-level port "result" as NAMESPACE whose nested ports are the fixed ones.
-                         (parse_outputs will serialize entire dict under 'result' if user returns a dict)
+      inputs : {"name":"inputs",  "identifier":"NAMESPACE", "ports": { ... }, ["dynamic":True,"item":{...}]}
+      outputs:
+        - static : {"name":"outputs","identifier":"NAMESPACE","ports": { field: {...}, ... } }
+        - dynamic: {"name":"outputs","identifier":"NAMESPACE",
+                    "ports": {"result": {"identifier":"NAMESPACE","ports": {...}, "dynamic":True, "item": {...}}}}
     """
     if not is_namespace_type(spec_type):
         raise TypeError("Spec must be a spec.namespace/spec.dynamic type")
 
-    is_dyn = bool(getattr(spec_type, "__ng_dynamic__", False))
-    fixed_ports = _spec_fields_to_ports(spec_type)
+    ns = _spec_to_port_object(spec_type)
 
     if target == "inputs":
-        # Allow unknown keys by design; serialize_ports handles unknown by treating as ANY.
-        return {"name": "inputs", "identifier": "NAMESPACE", "ports": fixed_ports}
+        schema = {"name": "inputs", "identifier": "NAMESPACE", "ports": ns.get("ports", {})}
+        if ns.get("dynamic"):
+            schema["dynamic"] = True
+            schema["item"] = ns["item"]
+        return schema
 
     if target == "outputs":
-        if not is_dyn:
-            # flatten fixed fields as individual outputs
-            return {"name": "outputs", "identifier": "NAMESPACE", "ports": fixed_ports}
+        if not ns.get("dynamic"):  # static → flatten
+            return {"name": "outputs", "identifier": "NAMESPACE", "ports": ns.get("ports", {})}
         else:
-            # dynamic: wrap everything under single 'result' namespace to capture arbitrary keys
-            return {
-                "name": "outputs",
+            result_port = {
                 "identifier": "NAMESPACE",
-                "ports": [{"name": "result", "identifier": "NAMESPACE", "ports": fixed_ports}],
+                "ports": ns.get("ports", {}),
+                "dynamic": True,
+                "item": ns["item"],
             }
+            return {"name": "outputs", "identifier": "NAMESPACE", "ports": {"result": result_port}}
 
     raise ValueError("target must be 'inputs' or 'outputs'")

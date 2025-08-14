@@ -179,7 +179,6 @@ class PyFunction(Process):
         from aiida_pythonjob.utils import parse_outputs
 
         self.output_ports = self.node.inputs.function_data.output_ports.get_dict()
-        print("Output ports:", self.output_ports)
         exit_code = parse_outputs(
             results,
             output_ports=self.output_ports,
@@ -190,7 +189,8 @@ class PyFunction(Process):
         if exit_code:
             return exit_code
         # Store the outputs
-        for output in self.output_ports["ports"]:
-            self.out(output["name"], output["value"])
+        for name, port in self.output_ports["ports"].items():
+            if "value" in port:
+                self.out(name, port["value"])
 
         return ExitCode()
