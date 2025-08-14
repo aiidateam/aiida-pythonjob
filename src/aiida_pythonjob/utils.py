@@ -422,7 +422,7 @@ def parse_outputs(
                 item_schema = {"identifier": "ANY"}
             for name, value in remaining.items():
                 # Create a value entry for the dynamic key directly at top-level
-                ports[name] = {"value": serialize_ports(value, item_schema, serializers=serializers)}
+                output_ports["ports"][name] = {"value": serialize_ports(value, item_schema, serializers=serializers)}
             return None
         # not dynamic → leftovers are unexpected
         if remaining:

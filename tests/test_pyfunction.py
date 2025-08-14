@@ -206,6 +206,23 @@ def test_nested_inputs_outputs():
     assert node.outputs.result2.diff2.value == -2
 
 
+def test_top_level_outputs_dynamic():
+    """Test function with dynamic top-level outputs."""
+
+    @pyfunction(outputs=spec.dynamic(any))
+    def test_dynamic(n: int):
+        return {f"data_{i}": i for i in range(n)}
+
+    result, node = run_get_node(
+        test_dynamic,
+        n=3,
+    )
+
+    # outputs should be serialized as dynamic rows
+    assert node.outputs.data_0.value == 0
+    assert node.outputs.data_1.value == 1
+
+
 def test_dynamic_rows():
     """Test function with dynamic rows."""
 
