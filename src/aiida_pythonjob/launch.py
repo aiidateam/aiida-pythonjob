@@ -60,6 +60,7 @@ def prepare_pythonjob_inputs(
         code = get_or_create_code(computer=computer, **command_info)
     # outputs
     node_outputs = generate_output_sockets(function or (lambda **_: None), outputs=outputs_spec)
+    print("node_outputs: ", node_outputs)
     output_ports_schema = outputs_sockets_to_ports(node_outputs)
     # inputs
     node_inputs = generate_input_sockets(function or (lambda **_: None), inputs=inputs_spec)
