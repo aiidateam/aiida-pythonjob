@@ -16,6 +16,8 @@ def prepare_pythonjob_inputs(
     function_inputs: Optional[Dict[str, Any]] = None,
     inputs_spec: Optional[type] = None,
     outputs_spec: Optional[type] = None,
+    output_ports: Optional[Dict[str, Any]] = None,
+    input_ports: Optional[Dict[str, Any]] = None,
     code: Optional[orm.AbstractCode] = None,
     command_info: Optional[Dict[str, str]] = None,
     computer: Union[str, orm.Computer] = "localhost",
@@ -59,20 +61,19 @@ def prepare_pythonjob_inputs(
         command_info = command_info or {}
         code = get_or_create_code(computer=computer, **command_info)
     # outputs
-    node_outputs = generate_output_sockets(function or (lambda **_: None), outputs=outputs_spec)
-    print("node_outputs: ", node_outputs)
-    output_ports_schema = outputs_sockets_to_ports(node_outputs)
+    if not output_ports:
+        node_outputs = generate_output_sockets(function or (lambda **_: None), outputs=outputs_spec)
+        output_ports = outputs_sockets_to_ports(node_outputs)
     # inputs
-    node_inputs = generate_input_sockets(function or (lambda **_: None), inputs=inputs_spec)
-    input_ports_schema = inputs_sockets_to_ports(node_inputs)
+    if not input_ports:
+        node_inputs = generate_input_sockets(function or (lambda **_: None), inputs=inputs_spec)
+        input_ports = inputs_sockets_to_ports(node_inputs)
 
-    function_data["output_ports"] = output_ports_schema
-    function_data["input_ports"] = input_ports_schema
+    function_data["output_ports"] = output_ports
+    function_data["input_ports"] = input_ports
     # serialize kwargs against the (nested) input schema
     function_inputs = function_inputs or {}
-    function_inputs = serialize_ports(
-        python_data=function_inputs, port_schema=input_ports_schema, serializers=serializers
-    )
+    function_inputs = serialize_ports(python_data=function_inputs, port_schema=input_ports, serializers=serializers)
     # replace "." with "__dot__" in the keys of a dictionary
     if deserializers:
         deserializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in deserializers.items()})
@@ -115,6 +116,8 @@ def prepare_pyfunction_inputs(
     function_inputs: Optional[Dict[str, Any]] = None,
     inputs_spec: Optional[type] = None,
     outputs_spec: Optional[type] = None,
+    output_ports: Optional[Dict[str, Any]] = None,
+    input_ports: Optional[Dict[str, Any]] = None,
     metadata: Optional[Dict[str, Any]] = None,
     process_label: Optional[str] = None,
     function_data: dict | None = None,
@@ -139,19 +142,19 @@ def prepare_pyfunction_inputs(
         else:
             raise ValueError("Invalid function type")
     # outputs
-    node_outputs = generate_output_sockets(function or (lambda **_: None), outputs=outputs_spec)
-    output_ports_schema = outputs_sockets_to_ports(node_outputs)
+    if not output_ports:
+        node_outputs = generate_output_sockets(function or (lambda **_: None), outputs=outputs_spec)
+        output_ports = outputs_sockets_to_ports(node_outputs)
     # inputs
-    node_inputs = generate_input_sockets(function or (lambda **_: None), inputs=inputs_spec)
-    input_ports_schema = inputs_sockets_to_ports(node_inputs)
+    if not input_ports:
+        node_inputs = generate_input_sockets(function or (lambda **_: None), inputs=inputs_spec)
+        input_ports = inputs_sockets_to_ports(node_inputs)
 
-    function_data["output_ports"] = output_ports_schema
-    function_data["input_ports"] = input_ports_schema
+    function_data["output_ports"] = output_ports
+    function_data["input_ports"] = input_ports
     # serialize the kwargs into AiiDA Data
     function_inputs = function_inputs or {}
-    function_inputs = serialize_ports(
-        python_data=function_inputs, port_schema=input_ports_schema, serializers=serializers
-    )
+    function_inputs = serialize_ports(python_data=function_inputs, port_schema=input_ports, serializers=serializers)
     # replace "." with "__dot__" in the keys of a dictionary
     if deserializers:
         deserializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in deserializers.items()})

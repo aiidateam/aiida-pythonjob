@@ -62,6 +62,8 @@ def pyfunction(
             # # Remove all the known inputs from the kwargs
             outputs_spec = kwargs.pop("outputs_spec", None) or outputs
             inputs_spec = kwargs.pop("inputs_spec", None) or inputs
+            input_ports = kwargs.pop("input_ports", None)
+            output_ports = kwargs.pop("output_ports", None)
             metadata = kwargs.pop("metadata", None)
             function_data = kwargs.pop("function_data", None)
             deserializers = kwargs.pop("deserializers", None)
@@ -75,6 +77,8 @@ def pyfunction(
                 function_inputs=function_inputs,
                 inputs_spec=inputs_spec,
                 outputs_spec=outputs_spec,
+                input_ports=input_ports,
+                output_ports=output_ports,
                 metadata=metadata,
                 process_label=process_label,
                 function_data=function_data,
