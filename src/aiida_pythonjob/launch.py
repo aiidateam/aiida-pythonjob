@@ -6,10 +6,7 @@ from typing import Any, Callable, Dict, Optional, Union
 
 from aiida import orm
 
-from .utils import (
-    build_function_data,
-    get_or_create_code,
-)
+from .utils import build_function_data, build_input_port_schema_from_signature, get_or_create_code
 
 
 def prepare_pythonjob_inputs(
@@ -71,8 +68,7 @@ def prepare_pythonjob_inputs(
     if inputs_spec is not None:
         input_ports_schema = spec_to_port_schema(inputs_spec, target="inputs")
     else:
-        # minimal fallback (or require inputs_spec)
-        input_ports_schema = {"name": "inputs", "identifier": "NAMESPACE", "ports": {}}
+        input_ports_schema = build_input_port_schema_from_signature(function)
 
     function_data["output_ports"] = output_ports_schema
     function_data["input_ports"] = input_ports_schema
@@ -159,8 +155,7 @@ def prepare_pyfunction_inputs(
     if inputs_spec is not None:
         input_ports_schema = spec_to_port_schema(inputs_spec, target="inputs")
     else:
-        # minimal fallback (or require inputs_spec)
-        input_ports_schema = {"name": "inputs", "identifier": "NAMESPACE", "ports": {}}
+        input_ports_schema = build_input_port_schema_from_signature(function)
 
     function_data["output_ports"] = output_ports_schema
     function_data["input_ports"] = input_ports_schema

@@ -164,6 +164,7 @@ def test_aiida_node_as_inputs_outputs():
         return {"sum": orm.Int(x + y), "diff": orm.Int(x - y)}
 
     result, node = run_get_node(add, x=orm.Int(1), y=orm.Int(2))
+    print("result: ", result)
     assert set(result.keys()) == {"sum", "diff"}
     assert result["sum"].value == 3
 
@@ -182,8 +183,8 @@ def test_nested_inputs_outputs():
     """Test function with nested inputs and outputs."""
 
     inp = spec.namespace(
-        input1=spec.namespace(x1=int, y1=int),
-        input2=spec.namespace(x2=int, y2=int),
+        input1=spec.namespace(x=int, y=int),
+        input2=spec.namespace(x=int, y=int),
     )
     out = spec.namespace(
         result1=spec.namespace(sum1=int, diff1=int),

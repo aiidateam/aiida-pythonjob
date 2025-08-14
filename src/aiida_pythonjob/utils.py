@@ -1,6 +1,19 @@
 import importlib
 import inspect
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union, _SpecialForm, get_type_hints
+from typing import (
+    Annotated,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Union,
+    _SpecialForm,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 from aiida.common.exceptions import NotExistent
 from aiida.engine import ExitCode
@@ -405,10 +418,12 @@ def parse_outputs(
             # - if user used the same key as port name, use that value;
             # - else treat the entire dict as the value for that single port.
             ((only_name, only_port),) = ports.items()
-            if only_name in results:
+            if already_serialized(results):
+                output_ports["ports"] = {key: {"value": results[key]} for key in results}
+            elif only_name in results:
                 only_port["value"] = serialize_ports(results.pop(only_name), only_port, serializers=serializers)
                 if results:
-                    logger.warning(f"Extra results ignored: {list(results.keys())}")
+                    logger.warning(f"Found extra results that are not included in the output: {list(results.keys())}")
             else:
                 only_port["value"] = serialize_ports(results, only_port, serializers=serializers)
             return None
@@ -422,14 +437,21 @@ def parse_outputs(
                 continue
             port["value"] = serialize_ports(results.pop(name), port, serializers=serializers)
         if results:
-            logger.warning(f"Extra results ignored: {list(results.keys())}")
+            logger.warning(f"Found extra results that are not included in the output: {list(results.keys())}")
         return None
 
     # single output + non-dict/tuple
     if len(ports) == 1:
+        # Single top-level output
+        # There are two cases:
+        # 1. The output as a whole will be serialized as the single output
+        # 2. The output is a mapping with already AiiDA data nodes as values, no need to serialize
         ((only_name, only_port),) = ports.items()
-        only_port["value"] = serialize_ports(results, only_port, serializers=serializers)
-        return None
+        if already_serialized(results):
+            output_ports["ports"] = {key: {"value": results[key]} for key in results}
+        else:
+            only_port["value"] = serialize_ports(results, only_port, serializers=serializers)
+            return None
 
     return exit_codes.ERROR_RESULT_OUTPUT_MISMATCH
 
@@ -461,21 +483,22 @@ def _unwrap_annotated(tp: Any) -> tuple[Any, dict]:
 
 
 def spec_field_to_port(name: str, f_type: Any) -> Dict[str, Any]:
-    """Convert a single spec field to a port dict. Nested namespaces recurse."""
+    """Convert a single spec field to a port dict. Nested namespaces recurse
+    and preserve dynamic/item shape."""
     base_type, meta = _unwrap_annotated(f_type)
+
     if is_namespace_type(base_type):
-        return {
-            "identifier": "NAMESPACE",
-            "ports": _spec_fields_to_ports(base_type),
-            **({"help": meta["help"]} if meta.get("help") else {}),
-            **({"required": bool(meta["required"])} if "required" in meta and meta["required"] is not None else {}),
-        }
-    # leaf
-    port = {"identifier": "ANY"}
+        # ⬇️ this returns {"identifier":"NAMESPACE","ports":{...}, ["dynamic":True,"item":{...}]}
+        port = _spec_to_port_object(base_type)
+    else:
+        port = {"identifier": "ANY"}
+
+    # apply field-level metadata if provided via Annotated[..., SocketMeta(...)]
     if meta.get("help"):
         port["help"] = meta["help"]
     if "required" in meta and meta["required"] is not None:
         port["required"] = bool(meta["required"])
+
     return port
 
 
@@ -551,3 +574,77 @@ def spec_to_port_schema(spec_type: type, *, target: str) -> Dict[str, Any]:
             return {"name": "outputs", "identifier": "NAMESPACE", "ports": {"result": result_port}}
 
     raise ValueError("target must be 'inputs' or 'outputs'")
+
+
+def _unwrap_annotated_full(tp):
+    """Return (base_type, metas:list) from Annotated[T, ...] or (tp, [])."""
+    origin = get_origin(tp)
+    if origin is Annotated:
+        args = get_args(tp)
+        if args:
+            return args[0], list(args[1:])
+    return tp, []
+
+
+def _first_socketmeta(metas):
+    for m in metas or []:
+        # duck typing to avoid hard import
+        if getattr(m, "__class__", None) and m.__class__.__name__ == "SocketMeta":
+            return m
+    return None
+
+
+def build_input_port_schema_from_signature(func) -> dict:
+    """
+    Infer dict-shaped input port schema from the function signature.
+    - Plain params -> ANY
+    - params annotated with spec.namespace/spec.dynamic -> NAMESPACE (with fields, dynamic+item respected)
+    - **kwargs -> mark inputs as dynamic with item ANY
+    """
+    sig = inspect.signature(func)
+    try:
+        ann = get_type_hints(func, include_extras=True)
+    except TypeError:
+        ann = get_type_hints(func)
+
+    ports: dict[str, dict] = {}
+    inputs_dynamic = False
+    item_schema = None
+
+    for name, param in sig.parameters.items():
+        if param.kind is inspect.Parameter.VAR_POSITIONAL:
+            raise NotImplementedError("*args is not supported in aiida-pythonjob input schema.")
+        if param.kind is inspect.Parameter.VAR_KEYWORD:
+            # **kwargs: top-level inputs become dynamic
+            inputs_dynamic = True
+            # unknown keys get ANY by default
+            item_schema = {"identifier": "ANY"}
+            continue
+
+        raw_tp = ann.get(name, None)
+        base_tp, metas = _unwrap_annotated_full(raw_tp) if raw_tp is not None else (None, [])
+        meta = _first_socketmeta(metas)
+
+        # namespace-annotated param
+        if base_tp is not None and is_namespace_type(base_tp):
+            obj = _spec_to_port_object(
+                base_tp
+            )  # {"identifier":"NAMESPACE","ports":{...}, ["dynamic":True,"item":{...}]}
+            port = obj
+        else:
+            port = {"identifier": "ANY"}
+
+        if meta and meta.help:
+            port["help"] = meta.help
+        if meta and meta.required is not None:
+            port["required"] = bool(meta.required)
+        else:
+            port["required"] = param.default is inspect._empty
+
+        ports[name] = port
+
+    schema = {"name": "inputs", "identifier": "NAMESPACE", "ports": ports}
+    if inputs_dynamic:
+        schema["dynamic"] = True
+        schema["item"] = item_schema or {"identifier": "ANY"}
+    return schema

@@ -13,11 +13,11 @@ from aiida.common.links import LinkType
 output_ports_with_multiple_sub_ports = {
     "name": "outputs",
     "identifier": "namespace",
-    "ports": [
-        {"name": "a", "identifier": "any"},
-        {"name": "b", "identifier": "any"},
-        {"name": "c", "identifier": "any"},
-    ],
+    "ports": {
+        "a": {"identifier": "any"},
+        "b": {"identifier": "any"},
+        "c": {"identifier": "any"},
+    },
 }
 
 
@@ -81,10 +81,10 @@ def test_dict_result(fixture_localhost):
             {
                 "name": "outputs",
                 "identifier": "namespace",
-                "ports": [
-                    {"name": "a", "identifier": "any"},
-                    {"name": "b", "identifier": "any"},
-                ],
+                "ports": {
+                    "a": {"identifier": "any"},
+                    "b": {"identifier": "any"},
+                },
             }
         )
     }
@@ -93,7 +93,7 @@ def test_dict_result(fixture_localhost):
     assert exit_code is None
     assert len(parser.outputs) == 2
     report = get_workchain_report(parser.node, levelname="WARNING")
-    assert "Found extra results that are not included in the output: dict_keys(['c'])" in report
+    assert "Found extra results that are not included in the output: ['c']" in report
 
 
 def test_dict_result_missing(fixture_localhost):
@@ -108,7 +108,7 @@ def test_dict_result_as_one_output(fixture_localhost):
     result = {"a": 1, "b": 2, "c": 3}
     function_data = {
         "output_ports": orm.Dict(
-            {"name": "outputs", "identifier": "namespace", "ports": [{"name": "result", "identifier": "any"}]}
+            {"name": "outputs", "identifier": "namespace", "ports": {"result": {"identifier": "any"}}}
         )
     }
     parser = create_parser(result, function_data)
@@ -121,24 +121,20 @@ def test_dict_result_as_one_output(fixture_localhost):
 def test_dict_result_only_show_one_output(fixture_localhost):
     result = {"a": 1, "b": 2}
     function_data = {
-        "output_ports": orm.Dict(
-            {"name": "outputs", "identifier": "namespace", "ports": [{"name": "a", "identifier": "any"}]}
-        )
+        "output_ports": orm.Dict({"name": "outputs", "identifier": "namespace", "ports": {"a": {"identifier": "any"}}})
     }
     parser = create_parser(result, function_data)
     parser.parse()
     assert len(parser.outputs) == 1
     assert parser.outputs["a"] == 1
     report = get_workchain_report(parser.node, levelname="WARNING")
-    assert "Found extra results that are not included in the output: dict_keys(['b'])" in report
+    assert "Found extra results that are not included in the output: ['b']" in report
 
 
 def test_exit_code(fixture_localhost):
     result = {"a": 1, "exit_code": {"status": 0, "message": ""}}
     function_data = {
-        "output_ports": orm.Dict(
-            {"name": "outputs", "identifier": "namespace", "ports": [{"name": "a", "identifier": "any"}]}
-        )
+        "output_ports": orm.Dict({"name": "outputs", "identifier": "namespace", "ports": {"a": {"identifier": "any"}}})
     }
     parser = create_parser(result, function_data)
     exit_code = parser.parse()
@@ -158,7 +154,7 @@ def test_no_output_file(fixture_localhost):
     result = {"a": 1, "b": 2, "c": 3}
     function_data = {
         "output_ports": orm.Dict(
-            {"name": "outputs", "identifier": "namespace", "ports": [{"name": "result", "identifier": "any"}]}
+            {"name": "outputs", "identifier": "namespace", "ports": {"result": {"identifier": "any"}}}
         )
     }
     parser = create_parser(result, function_data, output_filename="not_results.pickle")
@@ -180,9 +176,7 @@ def test_run_script_error(error_type, status):
     error = {"error_type": error_type, "exception_message": "error", "traceback": "traceback"}
     result = {"a": 1, "exit_code": {"status": 0, "message": ""}}
     function_data = {
-        "output_ports": orm.Dict(
-            {"name": "outputs", "identifier": "namespace", "ports": [{"name": "a", "identifier": "any"}]}
-        )
+        "output_ports": orm.Dict({"name": "outputs", "identifier": "namespace", "ports": {"a": {"identifier": "any"}}})
     }
     parser = create_parser(result, function_data, error=error)
     exit_code = parser.parse()
