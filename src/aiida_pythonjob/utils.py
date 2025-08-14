@@ -1,7 +1,6 @@
 import importlib
 import inspect
 from typing import (
-    Annotated,
     Any,
     Callable,
     Dict,
@@ -10,8 +9,6 @@ from typing import (
     Tuple,
     Union,
     _SpecialForm,
-    get_args,
-    get_origin,
     get_type_hints,
 )
 
@@ -260,30 +257,6 @@ Please check!
     return True, None
 
 
-def format_input_output_ports(data):
-    ports = data.get("ports", [])
-    if ports:
-        data["identifier"] = "NAMESPACE"
-        new_ports = []
-        for item in ports:
-            if isinstance(item, str):
-                new_ports.append({"name": item, "identifier": "ANY"})
-            elif isinstance(item, dict):
-                item.setdefault("identifier", "any")
-                # if the output is WORKGRAPH.NAMESPACE, we need to change it to NAMESPACE
-                if item["identifier"].split(".")[-1].upper() == "NAMESPACE":
-                    item["identifier"] = "NAMESPACE"
-                    new_ports.append(format_input_output_ports(item))
-                else:
-                    new_ports.append(item)
-            else:
-                raise ValueError(f"Invalid schema: {item}")
-        data["ports"] = new_ports
-    else:
-        data.setdefault("identifier", "ANY")
-    return data
-
-
 def serialize_ports(
     python_data: Any,
     port_schema: Dict[str, Any],
@@ -391,6 +364,9 @@ def parse_outputs(
     """Populate output_ports['ports'][name]['value'] from results based on schema."""
     ports: Dict[str, Dict[str, Any]] = output_ports.get("ports", {}) or {}
 
+    is_dyn = bool(output_ports.get("dynamic"))
+    item_schema = output_ports.get("item") if is_dyn else None
+
     # tuple -> map by order of port names
     if isinstance(results, tuple):
         names = _ordered_port_names(ports)
@@ -413,7 +389,7 @@ def parse_outputs(
             if exit_code.status != 0:
                 return exit_code
 
-        if len(ports) == 1:
+        if len(ports) == 1 and not is_dyn:
             # single output:
             # - if user used the same key as port name, use that value;
             # - else treat the entire dict as the value for that single port.
@@ -428,16 +404,29 @@ def parse_outputs(
                 only_port["value"] = serialize_ports(results, only_port, serializers=serializers)
             return None
 
-        # multi output: match by name
+        # multi output:
+        #  - match fixed outputs by name
+        #  - if top-level is dynamic, treat remaining keys as dynamic items using item_schema
+        remaining = dict(results)
+        # fixed fields
         for name, port in ports.items():
-            if name not in results:
-                if port.get("required", True):
-                    logger.warning(f"Missing required output: {name}")
-                    return exit_codes.ERROR_MISSING_OUTPUT
-                continue
-            port["value"] = serialize_ports(results.pop(name), port, serializers=serializers)
-        if results:
-            logger.warning(f"Found extra results that are not included in the output: {list(results.keys())}")
+            if name in remaining:
+                port["value"] = serialize_ports(remaining.pop(name), port, serializers=serializers)
+            elif port.get("required", True):
+                logger.warning(f"Missing required output: {name}")
+                return exit_codes.ERROR_MISSING_OUTPUT
+        # dynamic items at top-level
+        if is_dyn:
+            if item_schema is None:
+                logger.warning("Outputs marked dynamic but missing 'item' schema; treating as ANY.")
+                item_schema = {"identifier": "ANY"}
+            for name, value in remaining.items():
+                # Create a value entry for the dynamic key directly at top-level
+                ports[name] = {"value": serialize_ports(value, item_schema, serializers=serializers)}
+            return None
+        # not dynamic → leftovers are unexpected
+        if remaining:
+            logger.warning(f"Found extra results that are not included in the output: {list(remaining.keys())}")
         return None
 
     # single output + non-dict/tuple
@@ -454,197 +443,3 @@ def parse_outputs(
             return None
 
     return exit_codes.ERROR_RESULT_OUTPUT_MISMATCH
-
-
-# --- spec helpers (typed spec → dict schema) ---------------------------------
-
-
-def is_namespace_type(tp: Any) -> bool:
-    """True if tp is class created by spec.namespace/spec.dynamic (no hard import)."""
-    return isinstance(tp, type) and getattr(tp, "__ng_namespace__", False) is True
-
-
-def _unwrap_annotated(tp: Any) -> tuple[Any, dict]:
-    """If Annotated[T, SocketMeta(...)] used inside spec fields, return (T, meta_dict)."""
-    origin = getattr(tp, "__origin__", None)
-    if origin is not None and str(origin) == "typing.Annotated":
-        args = getattr(tp, "__args__", ())
-        if args:
-            base = args[0]
-            meta = {}
-            for m in args[1:]:
-                if getattr(m, "__class__", None) and m.__class__.__name__ == "SocketMeta":
-                    if hasattr(m, "help"):
-                        meta["help"] = m.help
-                    if hasattr(m, "required"):
-                        meta["required"] = m.required
-            return base, meta
-    return tp, {}
-
-
-def spec_field_to_port(name: str, f_type: Any) -> Dict[str, Any]:
-    """Convert a single spec field to a port dict. Nested namespaces recurse
-    and preserve dynamic/item shape."""
-    base_type, meta = _unwrap_annotated(f_type)
-
-    if is_namespace_type(base_type):
-        # ⬇️ this returns {"identifier":"NAMESPACE","ports":{...}, ["dynamic":True,"item":{...}]}
-        port = _spec_to_port_object(base_type)
-    else:
-        port = {"identifier": "ANY"}
-
-    # apply field-level metadata if provided via Annotated[..., SocketMeta(...)]
-    if meta.get("help"):
-        port["help"] = meta["help"]
-    if "required" in meta and meta["required"] is not None:
-        port["required"] = bool(meta["required"])
-
-    return port
-
-
-def _spec_fields_to_ports(ns_type: type) -> Dict[str, Dict[str, Any]]:
-    """Expand fixed fields of a spec namespace into an ordered dict of port dicts."""
-    fields: Dict[str, Any] = getattr(ns_type, "__ng_fields__", {}) or {}
-    defaults: Dict[str, Any] = getattr(ns_type, "__ng_defaults__", {}) or {}
-    ports: Dict[str, Dict[str, Any]] = {}
-    for fname, ftype in fields.items():
-        port = spec_field_to_port(fname, ftype)
-        if "required" not in port:
-            port["required"] = fname not in defaults
-        ports[fname] = port
-    return ports
-
-
-def _spec_to_port_object(spec_type: type) -> Dict[str, Any]:
-    """Convert a spec.namespace/spec.dynamic type to a port object (no name)."""
-    if not is_namespace_type(spec_type):
-        raise TypeError("spec_type must be a spec.namespace/spec.dynamic type")
-
-    is_dyn = bool(getattr(spec_type, "__ng_dynamic__", False))
-    fields = _spec_fields_to_ports(spec_type)
-
-    obj: Dict[str, Any] = {"identifier": "NAMESPACE", "ports": fields}
-
-    if is_dyn:
-        item_type = getattr(spec_type, "__ng_item_type__", None)
-        if item_type is None:
-            item_obj = {"identifier": "ANY"}
-        elif is_namespace_type(item_type):
-            item_obj = _spec_to_port_object(item_type)
-        else:
-            item_obj = {"identifier": "ANY"}
-        obj["dynamic"] = True
-        obj["item"] = item_obj
-
-    return obj
-
-
-def spec_to_port_schema(spec_type: type, *, target: str) -> Dict[str, Any]:
-    """
-    Convert a spec type into dict schema:
-
-      inputs : {"name":"inputs",  "identifier":"NAMESPACE", "ports": { ... }, ["dynamic":True,"item":{...}]}
-      outputs:
-        - static : {"name":"outputs","identifier":"NAMESPACE","ports": { field: {...}, ... } }
-        - dynamic: {"name":"outputs","identifier":"NAMESPACE",
-                    "ports": {"result": {"identifier":"NAMESPACE","ports": {...}, "dynamic":True, "item": {...}}}}
-    """
-    if not is_namespace_type(spec_type):
-        raise TypeError("Spec must be a spec.namespace/spec.dynamic type")
-
-    ns = _spec_to_port_object(spec_type)
-
-    if target == "inputs":
-        schema = {"name": "inputs", "identifier": "NAMESPACE", "ports": ns.get("ports", {})}
-        if ns.get("dynamic"):
-            schema["dynamic"] = True
-            schema["item"] = ns["item"]
-        return schema
-
-    if target == "outputs":
-        if not ns.get("dynamic"):  # static → flatten
-            return {"name": "outputs", "identifier": "NAMESPACE", "ports": ns.get("ports", {})}
-        else:
-            result_port = {
-                "identifier": "NAMESPACE",
-                "ports": ns.get("ports", {}),
-                "dynamic": True,
-                "item": ns["item"],
-            }
-            return {"name": "outputs", "identifier": "NAMESPACE", "ports": {"result": result_port}}
-
-    raise ValueError("target must be 'inputs' or 'outputs'")
-
-
-def _unwrap_annotated_full(tp):
-    """Return (base_type, metas:list) from Annotated[T, ...] or (tp, [])."""
-    origin = get_origin(tp)
-    if origin is Annotated:
-        args = get_args(tp)
-        if args:
-            return args[0], list(args[1:])
-    return tp, []
-
-
-def _first_socketmeta(metas):
-    for m in metas or []:
-        # duck typing to avoid hard import
-        if getattr(m, "__class__", None) and m.__class__.__name__ == "SocketMeta":
-            return m
-    return None
-
-
-def build_input_port_schema_from_signature(func) -> dict:
-    """
-    Infer dict-shaped input port schema from the function signature.
-    - Plain params -> ANY
-    - params annotated with spec.namespace/spec.dynamic -> NAMESPACE (with fields, dynamic+item respected)
-    - **kwargs -> mark inputs as dynamic with item ANY
-    """
-    sig = inspect.signature(func)
-    try:
-        ann = get_type_hints(func, include_extras=True)
-    except TypeError:
-        ann = get_type_hints(func)
-
-    ports: dict[str, dict] = {}
-    inputs_dynamic = False
-    item_schema = None
-
-    for name, param in sig.parameters.items():
-        if param.kind is inspect.Parameter.VAR_POSITIONAL:
-            raise NotImplementedError("*args is not supported in aiida-pythonjob input schema.")
-        if param.kind is inspect.Parameter.VAR_KEYWORD:
-            # **kwargs: top-level inputs become dynamic
-            inputs_dynamic = True
-            # unknown keys get ANY by default
-            item_schema = {"identifier": "ANY"}
-            continue
-
-        raw_tp = ann.get(name, None)
-        base_tp, metas = _unwrap_annotated_full(raw_tp) if raw_tp is not None else (None, [])
-        meta = _first_socketmeta(metas)
-
-        # namespace-annotated param
-        if base_tp is not None and is_namespace_type(base_tp):
-            obj = _spec_to_port_object(
-                base_tp
-            )  # {"identifier":"NAMESPACE","ports":{...}, ["dynamic":True,"item":{...}]}
-            port = obj
-        else:
-            port = {"identifier": "ANY"}
-
-        if meta and meta.help:
-            port["help"] = meta.help
-        if meta and meta.required is not None:
-            port["required"] = bool(meta.required)
-        else:
-            port["required"] = param.default is inspect._empty
-
-        ports[name] = port
-
-    schema = {"name": "inputs", "identifier": "NAMESPACE", "ports": ports}
-    if inputs_dynamic:
-        schema["dynamic"] = True
-        schema["item"] = item_schema or {"identifier": "ANY"}
-    return schema

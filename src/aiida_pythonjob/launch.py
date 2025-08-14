@@ -5,8 +5,10 @@ import os
 from typing import Any, Callable, Dict, Optional, Union
 
 from aiida import orm
+from node_graph.nodes.utils import generate_input_sockets, generate_output_sockets
 
-from .utils import build_function_data, build_input_port_schema_from_signature, get_or_create_code
+from .ports_adapter import inputs_sockets_to_ports, outputs_sockets_to_ports
+from .utils import build_function_data, get_or_create_code, serialize_ports
 
 
 def prepare_pythonjob_inputs(
@@ -27,7 +29,6 @@ def prepare_pythonjob_inputs(
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """Prepare the inputs for PythonJob"""
-    from .utils import serialize_ports, spec_to_port_schema
 
     if function is None and function_data is None:
         raise ValueError("Either function or function_data must be provided")
@@ -58,17 +59,11 @@ def prepare_pythonjob_inputs(
         command_info = command_info or {}
         code = get_or_create_code(computer=computer, **command_info)
     # outputs
-    if outputs_spec is not None:
-        output_ports_schema = spec_to_port_schema(outputs_spec, target="outputs")
-    else:
-        # default single result
-        output_ports_schema = {"name": "outputs", "identifier": "NAMESPACE", "ports": {"result": {"identifier": "ANY"}}}
-
+    node_outputs = generate_output_sockets(function or (lambda **_: None), outputs=outputs_spec)
+    output_ports_schema = outputs_sockets_to_ports(node_outputs)
     # inputs
-    if inputs_spec is not None:
-        input_ports_schema = spec_to_port_schema(inputs_spec, target="inputs")
-    else:
-        input_ports_schema = build_input_port_schema_from_signature(function)
+    node_inputs = generate_input_sockets(function or (lambda **_: None), inputs=inputs_spec)
+    input_ports_schema = inputs_sockets_to_ports(node_inputs)
 
     function_data["output_ports"] = output_ports_schema
     function_data["input_ports"] = input_ports_schema
@@ -130,8 +125,6 @@ def prepare_pyfunction_inputs(
     """Prepare the inputs for PythonJob"""
     import types
 
-    from .utils import serialize_ports, spec_to_port_schema
-
     if function is None and function_data is None:
         raise ValueError("Either function or function_data must be provided")
     if function is not None and function_data is not None:
@@ -145,17 +138,11 @@ def prepare_pyfunction_inputs(
         else:
             raise ValueError("Invalid function type")
     # outputs
-    if outputs_spec is not None:
-        output_ports_schema = spec_to_port_schema(outputs_spec, target="outputs")
-    else:
-        # default single result
-        output_ports_schema = {"name": "outputs", "identifier": "NAMESPACE", "ports": {"result": {"identifier": "ANY"}}}
-
+    node_outputs = generate_output_sockets(function or (lambda **_: None), outputs=outputs_spec)
+    output_ports_schema = outputs_sockets_to_ports(node_outputs)
     # inputs
-    if inputs_spec is not None:
-        input_ports_schema = spec_to_port_schema(inputs_spec, target="inputs")
-    else:
-        input_ports_schema = build_input_port_schema_from_signature(function)
+    node_inputs = generate_input_sockets(function or (lambda **_: None), inputs=inputs_spec)
+    input_ports_schema = inputs_sockets_to_ports(node_inputs)
 
     function_data["output_ports"] = output_ports_schema
     function_data["input_ports"] = input_ports_schema

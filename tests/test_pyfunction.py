@@ -204,3 +204,30 @@ def test_nested_inputs_outputs():
     assert node.outputs.result1.diff1.value == -1
     assert node.outputs.result2.sum2.value == 4
     assert node.outputs.result2.diff2.value == -2
+
+
+def test_dynamic_rows():
+    """Test function with dynamic rows."""
+
+    row = spec.namespace(sum=any, product=any)
+
+    @pyfunction(outputs=spec.dynamic(row, sum=int))
+    def test_dynamic_rows(data: spec.dynamic(row, sum=int)):
+        return data
+
+    result, node = run_get_node(
+        test_dynamic_rows,
+        data={
+            "data_0": {"sum": 0, "product": 0},
+            "data_1": {"sum": 1, "product": 2},
+            "data_2": {"sum": 2, "product": 4},
+            "sum": 1,
+        },
+    )
+
+    # inputs should be serialized as dynamic rows
+    assert node.inputs.function_inputs.data.sum.value == 1
+    assert node.inputs.function_inputs.data.data_0.sum.value == 0
+    # outputs should be serialized as dynamic rows
+    assert node.outputs.sum.value == 1
+    assert node.outputs.data_0.sum.value == 0
