@@ -5,6 +5,8 @@ from __future__ import annotations
 import traceback
 import typing as t
 
+import cloudpickle
+import plumpy
 from aiida.common.lang import override
 from aiida.engine import Process, ProcessSpec
 from aiida.engine.processes.exit_code import ExitCode
@@ -30,11 +32,19 @@ class PyFunction(Process):
         super().__init__(enable_persistence=False, *args, **kwargs)  # type: ignore[misc]
         self._func = None
 
+    @override
+    def load_instance_state(
+        self, saved_state: t.MutableMapping[str, t.Any], load_context: plumpy.persistence.LoadSaveContext
+    ) -> None:
+        """Load the instance state from the saved state."""
+
+        super().load_instance_state(saved_state, load_context)
+        # Restore the function from the pickled data
+        self._func = cloudpickle.loads(self.inputs.function_data.pickled_function)
+
     @property
     def func(self) -> t.Callable[..., t.Any]:
-        import cloudpickle
-
-        if not getattr(self, "_func", None):
+        if self._func is None:
             self._func = cloudpickle.loads(self.inputs.function_data.pickled_function)
         return self._func
 
