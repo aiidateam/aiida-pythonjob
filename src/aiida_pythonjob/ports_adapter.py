@@ -64,28 +64,7 @@ def _socket_to_port_object(sock: Dict[str, Any]) -> Dict[str, Any]:
     return obj
 
 
-def _port_obj_to_list_shape(obj: Dict[str, Any]) -> Dict[str, Any]:
-    """Recursively convert {'ports': {name: obj}} → {'ports': [{'name': name, ...}] }."""
-    if obj.get("identifier") == "NAMESPACE":
-        mapped = []
-        for name, child in (obj.get("ports") or {}).items():
-            mapped.append({"name": name, **_port_obj_to_list_shape(child)})
-        out = {"identifier": "NAMESPACE", "ports": mapped}
-        if obj.get("dynamic"):
-            out["dynamic"] = True
-        if "item" in obj:
-            out["item"] = _port_obj_to_list_shape(obj["item"])
-        # carry optional fields
-        if "help" in obj:
-            out["help"] = obj["help"]
-        if "required" in obj:
-            out["required"] = obj["required"]
-        return out
-    # leaf: nothing to convert
-    return {k: v for k, v in obj.items() if k != "ports"}
-
-
-def inputs_sockets_to_ports(node_inputs: Dict[str, Any], *, as_list: bool = False) -> Dict[str, Any]:
+def inputs_sockets_to_ports(node_inputs: Dict[str, Any]) -> Dict[str, Any]:
     ports_map: Dict[str, Dict[str, Any]] = {}
     for name, sock in (node_inputs.get("sockets") or {}).items():
         ports_map[name] = _socket_to_port_object(sock)
@@ -104,14 +83,10 @@ def inputs_sockets_to_ports(node_inputs: Dict[str, Any], *, as_list: bool = Fals
                 else {"identifier": "ANY"}
             )
 
-    if as_list:
-        schema["ports"] = [{"name": n, **_port_obj_to_list_shape(p)} for n, p in ports_map.items()]
-        if "item" in schema:
-            schema["item"] = _port_obj_to_list_shape(schema["item"])
     return schema
 
 
-def outputs_sockets_to_ports(node_outputs: Dict[str, Any], *, as_list: bool = False) -> Dict[str, Any]:
+def outputs_sockets_to_ports(node_outputs: Dict[str, Any]) -> Dict[str, Any]:
     meta = node_outputs.get("metadata", {}) or {}
     sockets = node_outputs.get("sockets") or {}
 
@@ -128,8 +103,4 @@ def outputs_sockets_to_ports(node_outputs: Dict[str, Any], *, as_list: bool = Fa
                 if _is_namespace_identifier(item_ident)
                 else {"identifier": "ANY"}
             )
-    if as_list:
-        schema["ports"] = [{"name": n, **_port_obj_to_list_shape(p)} for n, p in ports_map.items()]
-        if "item" in schema:
-            schema["item"] = _port_obj_to_list_shape(schema["item"])
     return schema
