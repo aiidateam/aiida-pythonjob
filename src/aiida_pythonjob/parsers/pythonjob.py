@@ -72,8 +72,9 @@ class PythonJobParser(Parser):
                     return exit_code
 
                 # Store the outputs
-                for output in self.output_ports["ports"]:
-                    self.out(output["name"], output["value"])
+                for name, port in self.output_ports["ports"].items():
+                    if "value" in port:
+                        self.out(name, port["value"])
 
         except OSError:
             return self.exit_codes.ERROR_READING_OUTPUT_FILE

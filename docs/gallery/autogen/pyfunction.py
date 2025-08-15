@@ -6,14 +6,14 @@ PyFunction
 
 ######################################################################
 # Default outputs
-# --------------
+# -----------------
 #
 # The default output of the function is `result`. The `pyfunction` task
 # will store the result as one node in the database with the key `result`.
 #
 from aiida import load_profile
 from aiida.engine import run_get_node
-from aiida_pythonjob import pyfunction
+from aiida_pythonjob import pyfunction, spec
 
 load_profile()
 
@@ -35,7 +35,7 @@ print("result: ", result)
 #
 
 
-@pyfunction(outputs=[{"name": "sum"}, {"name": "diff"}])
+@pyfunction(outputs=spec.namespace(sum=any, diff=any))
 def add(x, y):
     return {"sum": x + y, "diff": x - y}
 
@@ -48,7 +48,7 @@ print("diff: ", result["diff"])
 
 ######################################################################
 # Namespace Output
-# --------------
+# -----------------
 #
 # The `pyfunction` allows users to define namespace outputs. A namespace output
 # is a dictionary with keys and values returned by a function. Each value in
@@ -70,7 +70,7 @@ from ase import Atoms  # noqa: E402
 from ase.build import bulk  # noqa: E402
 
 
-@pyfunction(outputs=[{"name": "scaled_structures", "identifier": "namespace"}])
+@pyfunction(outputs=spec.dynamic(Atoms))
 def generate_structures(structure: Atoms, factor_lst: list) -> dict:
     """Scale the structure by the given factor_lst."""
     scaled_structures = {}
@@ -78,12 +78,12 @@ def generate_structures(structure: Atoms, factor_lst: list) -> dict:
         atoms = structure.copy()
         atoms.set_cell(atoms.cell * factor_lst[i], scale_atoms=True)
         scaled_structures[f"s_{i}"] = atoms
-    return {"scaled_structures": scaled_structures}
+    return scaled_structures
 
 
 result, node = run_get_node(generate_structures, structure=bulk("Al"), factor_lst=[0.95, 1.0, 1.05])
 print("scaled_structures: ")
-for key, value in result["scaled_structures"].items():
+for key, value in result.items():
     print(key, value)
 
 
@@ -115,7 +115,7 @@ print("exit_message:", node.exit_message)
 
 ######################################################################
 # Define your data serializer and deserializer
-# --------------
+# ----------------------------------------------
 #
 # PythonJob search data serializer from the `aiida.data` entry point by the
 # module name and class name (e.g., `ase.atoms.Atoms`).
