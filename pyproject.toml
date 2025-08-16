@@ -24,7 +24,7 @@ dependencies = [
     "aiida-core>=2.3,<3",
     "ase",
     "cloudpickle",
-    "node-graph==0.2.22",
+    "node-graph~=0.2.23",
 ]
 
 [project.optional-dependencies]
