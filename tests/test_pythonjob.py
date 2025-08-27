@@ -6,7 +6,7 @@ import pytest
 from aiida import orm
 from aiida.engine import run_get_node
 from aiida_pythonjob import PythonJob, prepare_pythonjob_inputs
-from node_graph import spec
+from node_graph import socket_spec as spec
 
 
 def test_validate_inputs(fixture_localhost):
