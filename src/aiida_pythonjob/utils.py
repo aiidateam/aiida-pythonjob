@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import importlib
 import inspect
 from typing import (
@@ -13,8 +15,11 @@ from typing import (
 )
 
 from aiida.common.exceptions import NotExistent
-from aiida.engine import ExitCode
-from aiida.orm import Computer, InstalledCode, User, load_code, load_computer
+from aiida.orm import Computer, InstalledCode, Str, User, load_code, load_computer
+from node_graph.socket_spec import SocketSpec
+
+from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
+from aiida_pythonjob.data.serializer import general_serializer
 
 
 def get_required_imports(func: Callable) -> Dict[str, set]:
@@ -108,6 +113,7 @@ def get_or_create_code(
         return load_code(f"{label}@{computer}")
     except NotExistent:
         description = f"Code on computer: {computer}"
+        computer = computer.value if isinstance(computer, Str) else computer
         computer = load_computer(computer)
         filepath_executable = filepath_executable or label
         code = InstalledCode(
@@ -257,189 +263,109 @@ Please check!
     return True, None
 
 
+def _ensure_spec(schema: SocketSpec | Dict[str, Any]) -> SocketSpec:
+    if isinstance(schema, SocketSpec):
+        return schema
+    if isinstance(schema, dict):
+        return SocketSpec.from_dict(schema)
+    raise TypeError(f"Unsupported schema type: {type(schema)}")
+
+
+def _has_var_kwargs(spec: SocketSpec) -> bool:
+    for field in spec.fields.values():
+        role = getattr(field.meta, "call_role", None)
+        if role == "var_kwargs":
+            return True
+    return False
+
+
 def serialize_ports(
     python_data: Any,
-    port_schema: Dict[str, Any],
+    port_schema: SocketSpec | Dict[str, Any],
     serializers: Optional[Dict[str, str]] = None,
 ) -> Any:
-    from aiida_pythonjob.data.serializer import general_serializer
+    """Serialize raw Python data to AiiDA Data following a SocketSpec schema.
 
-    if port_schema["identifier"].upper() != "NAMESPACE":
-        return general_serializer(python_data, serializers=serializers, store=False)
+    Handles special namespace roles like ``var_kwargs`` by accepting arbitrary
+    keys at that namespace level (using ``item`` if provided, otherwise ANY).
+    """
+    spec = _ensure_spec(port_schema)
 
     # Namespace
-    name = port_schema.get("name", "<namespace>")
-    if not isinstance(python_data, dict):
-        raise ValueError(f"Expected dict for namespace '{name}', got {type(python_data)}")
+    if spec.is_namespace():
+        name = getattr(spec.meta, "help", None) or "<namespace>"
+        if not isinstance(python_data, dict):
+            raise ValueError(f"Expected dict for namespace '{name}', got {type(python_data)}")
 
-    sub_ports: Dict[str, Dict[str, Any]] = port_schema.get("ports", {}) or {}
-    is_dyn = bool(port_schema.get("dynamic"))
-    item_schema = port_schema.get("item") if is_dyn else None
+        out: Dict[str, Any] = {}
+        fields = spec.fields or {}
+        is_dyn = bool(spec.dynamic)
+        item_spec = spec.item if is_dyn else None
+        allow_extra = _has_var_kwargs(spec)
+        catch_schema = item_spec or SocketSpec(identifier="node_graph.any")
 
-    out: Dict[str, Any] = {}
-    for key, value in python_data.items():
-        if key in sub_ports:
-            sub = sub_ports[key]
-            if sub.get("identifier", "ANY").upper() == "NAMESPACE":
-                out[key] = serialize_ports(value, sub, serializers=serializers)
+        for key, value in python_data.items():
+            if key in fields:
+                child_spec = fields[key]
+                if child_spec.is_namespace():
+                    out[key] = serialize_ports(value, child_spec, serializers=serializers)
+                else:
+                    out[key] = general_serializer(value, serializers=serializers, store=False)
+            elif (is_dyn and item_spec is not None) or allow_extra:
+                schema = item_spec if (is_dyn and item_spec is not None) else catch_schema
+                if schema.is_namespace():
+                    out[key] = serialize_ports(value, schema, serializers=serializers)
+                else:
+                    out[key] = general_serializer(value, serializers=serializers, store=False)
             else:
-                out[key] = general_serializer(value, serializers=serializers, store=False)
-        elif is_dyn and item_schema is not None:
-            if item_schema.get("identifier", "ANY").upper() == "NAMESPACE":
-                out[key] = serialize_ports(value, item_schema, serializers=serializers)
-            else:
-                out[key] = general_serializer(value, serializers=serializers, store=False)
-        else:
-            raise ValueError(f"Unexpected key '{key}' for namespace '{name}' (not dynamic).")
+                raise ValueError(f"Unexpected key '{key}' for namespace '{name}' (not dynamic).")
+        return out
 
-    return out
+    # Leaf
+    return general_serializer(python_data, serializers=serializers, store=False)
 
 
 def deserialize_ports(
     serialized_data: Any,
-    port_schema: Dict[str, Any],
+    port_schema: SocketSpec | Dict[str, Any],
     deserializers: Optional[Dict[str, str]] = None,
 ) -> Any:
-    from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
+    """Deserialize AiiDA Data to raw Python following a SocketSpec schema.
 
-    if port_schema["identifier"].upper() != "NAMESPACE":
-        return deserialize_to_raw_python_data(serialized_data, deserializers=deserializers)
+    Respects ``var_kwargs`` by accepting arbitrary keys and using ``item`` if set,
+    otherwise treating items as ANY.
+    """
+    spec = _ensure_spec(port_schema)
 
     # Namespace
-    name = port_schema.get("name", "<namespace>")
-    if not isinstance(serialized_data, dict):
-        raise ValueError(f"Expected dict for namespace '{name}', got {type(serialized_data)}")
+    if spec.is_namespace():
+        name = getattr(spec.meta, "help", None) or "<namespace>"
+        if not isinstance(serialized_data, dict):
+            raise ValueError(f"Expected dict for namespace '{name}', got {type(serialized_data)}")
 
-    sub_ports: Dict[str, Dict[str, Any]] = port_schema.get("ports", {}) or {}
-    is_dyn = bool(port_schema.get("dynamic"))
-    item_schema = port_schema.get("item") if is_dyn else None
+        out: Dict[str, Any] = {}
+        fields = spec.fields or {}
+        is_dyn = bool(spec.dynamic)
+        item_spec = spec.item if is_dyn else None
+        allow_extra = _has_var_kwargs(spec)
+        catch_schema = item_spec or SocketSpec(identifier="node_graph.any")
 
-    out: Dict[str, Any] = {}
-    for key, value in serialized_data.items():
-        if key in sub_ports:
-            sub = sub_ports[key]
-            if sub.get("identifier", "ANY").upper() == "NAMESPACE":
-                out[key] = deserialize_ports(value, sub, deserializers=deserializers)
+        for key, value in serialized_data.items():
+            if key in fields:
+                child_spec = fields[key]
+                if child_spec.is_namespace():
+                    out[key] = deserialize_ports(value, child_spec, deserializers=deserializers)
+                else:
+                    out[key] = deserialize_to_raw_python_data(value, deserializers=deserializers)
+            elif (is_dyn and item_spec is not None) or allow_extra:
+                schema = item_spec if (is_dyn and item_spec is not None) else catch_schema
+                if schema.is_namespace():
+                    out[key] = deserialize_ports(value, schema, deserializers=deserializers)
+                else:
+                    out[key] = deserialize_to_raw_python_data(value, deserializers=deserializers)
             else:
-                out[key] = deserialize_to_raw_python_data(value, deserializers=deserializers)
-        elif is_dyn and item_schema is not None:
-            if item_schema.get("identifier", "ANY").upper() == "NAMESPACE":
-                out[key] = deserialize_ports(value, item_schema, deserializers=deserializers)
-            else:
-                out[key] = deserialize_to_raw_python_data(value, deserializers=deserializers)
-        else:
-            raise ValueError(f"Unexpected key '{key}' for namespace '{name}' (not dynamic).")
+                raise ValueError(f"Unexpected key '{key}' for namespace '{name}' (not dynamic).")
+        return out
 
-    return out
-
-
-def already_serialized(results):
-    """Check if the results are already serialized."""
-    import collections
-
-    from aiida import orm
-
-    if isinstance(results, orm.Data):
-        return True
-    elif isinstance(results, collections.abc.Mapping):
-        for value in results.values():
-            if not already_serialized(value):
-                return False
-        return True
-    else:
-        return False
-
-
-def _ordered_port_names(ports: Dict[str, Dict[str, Any]]) -> List[str]:
-    return list(ports.keys())  # insertion order (Py3.7+)
-
-
-def parse_outputs(
-    results: Any,
-    output_ports: Dict[str, Any],
-    exit_codes,
-    logger,
-    serializers: Optional[Dict[str, str]] = None,
-) -> Union[Dict[str, Any], ExitCode]:
-    """Populate output_ports['ports'][name]['value'] from results based on schema."""
-    ports: Dict[str, Dict[str, Any]] = output_ports.get("ports", {}) or {}
-
-    is_dyn = bool(output_ports.get("dynamic"))
-    item_schema = output_ports.get("item") if is_dyn else None
-
-    # tuple -> map by order of port names
-    if isinstance(results, tuple):
-        names = _ordered_port_names(ports)
-        if len(names) != len(results):
-            return exit_codes.ERROR_RESULT_OUTPUT_MISMATCH
-        for i, name in enumerate(names):
-            port = ports[name]
-            port["value"] = serialize_ports(results[i], port, serializers=serializers)
-        return None
-
-    # dict
-    if isinstance(results, dict):
-        # handle optional inline exit code
-        exit_code = results.pop("exit_code", None)
-        if exit_code:
-            if isinstance(exit_code, dict):
-                exit_code = ExitCode(exit_code["status"], exit_code["message"])
-            elif isinstance(exit_code, int):
-                exit_code = ExitCode(exit_code)
-            if exit_code.status != 0:
-                return exit_code
-
-        if len(ports) == 1 and not is_dyn:
-            # single output:
-            # - if user used the same key as port name, use that value;
-            # - else treat the entire dict as the value for that single port.
-            ((only_name, only_port),) = ports.items()
-            if already_serialized(results):
-                output_ports["ports"] = {key: {"value": results[key]} for key in results}
-            elif only_name in results:
-                only_port["value"] = serialize_ports(results.pop(only_name), only_port, serializers=serializers)
-                if results:
-                    logger.warning(f"Found extra results that are not included in the output: {list(results.keys())}")
-            else:
-                only_port["value"] = serialize_ports(results, only_port, serializers=serializers)
-            return None
-
-        # multi output:
-        #  - match fixed outputs by name
-        #  - if top-level is dynamic, treat remaining keys as dynamic items using item_schema
-        remaining = dict(results)
-        # fixed fields
-        for name, port in ports.items():
-            if name in remaining:
-                port["value"] = serialize_ports(remaining.pop(name), port, serializers=serializers)
-            elif port.get("required", True):
-                logger.warning(f"Missing required output: {name}")
-                return exit_codes.ERROR_MISSING_OUTPUT
-        # dynamic items at top-level
-        if is_dyn:
-            if item_schema is None:
-                logger.warning("Outputs marked dynamic but missing 'item' schema; treating as ANY.")
-                item_schema = {"identifier": "ANY"}
-            for name, value in remaining.items():
-                # Create a value entry for the dynamic key directly at top-level
-                output_ports["ports"][name] = {"value": serialize_ports(value, item_schema, serializers=serializers)}
-            return None
-        # not dynamic → leftovers are unexpected
-        if remaining:
-            logger.warning(f"Found extra results that are not included in the output: {list(remaining.keys())}")
-        return None
-
-    # single output + non-dict/tuple
-    if len(ports) == 1:
-        # Single top-level output
-        # There are two cases:
-        # 1. The output as a whole will be serialized as the single output
-        # 2. The output is a mapping with already AiiDA data nodes as values, no need to serialize
-        ((only_name, only_port),) = ports.items()
-        if already_serialized(results):
-            output_ports["ports"] = {key: {"value": results[key]} for key in results}
-        else:
-            only_port["value"] = serialize_ports(results, only_port, serializers=serializers)
-            return None
-
-    return exit_codes.ERROR_RESULT_OUTPUT_MISMATCH
+    # Leaf
+    return deserialize_to_raw_python_data(serialized_data, deserializers=deserializers)
