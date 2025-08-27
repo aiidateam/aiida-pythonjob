@@ -18,23 +18,32 @@ def atoms_to_structure_data(structure):
 
 
 def get_serializers_from_entry_points() -> dict:
-    # Retrieve the entry points for 'aiida.data' and store them in a dictionary
-    eps = entry_points()
+    """Retrieve the entry points for 'aiida.data' and store them in a dictionary."""
+    eps_all = entry_points()
     if sys.version_info >= (3, 10):
-        group = eps.select(group="aiida.data")
+        group = eps_all.select(group="aiida.data")
     else:
-        group = eps.get("aiida.data", [])
-    eps = {}
-    for ep in group:
+        group = eps_all.get("aiida.data", [])
+
+    # By converting the group to a set, we remove accidental duplicates
+    # where the same EntryPoint object is discovered twice. Legitimate
+    # competing entry points from different packages will remain.
+    unique_group = set(group)
+
+    serializers = {}
+    for ep in unique_group:
         # split the entry point name by first ".", and check the last part
         key = ep.name.split(".", 1)[-1]
+
         # skip key without "." because it is not a module name for a data type
         if "." not in key:
             continue
-        eps.setdefault(key, [])
+
+        serializers.setdefault(key, [])
         # get the path of the entry point value and replace ":" with "."
-        eps[key].append(ep.value.replace(":", "."))
-    return eps
+        serializers[key].append(ep.value.replace(":", "."))
+
+    return serializers
 
 
 def get_serializers() -> dict:

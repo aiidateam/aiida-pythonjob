@@ -1,7 +1,7 @@
 from aiida import orm
 from aiida.engine import run_get_node
 from aiida_pythonjob import pyfunction
-from node_graph import spec
+from node_graph import socket_spec as spec
 
 
 def test_function_default_outputs(fixture_localhost):

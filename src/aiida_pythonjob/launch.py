@@ -5,9 +5,9 @@ import os
 from typing import Any, Callable, Dict, Optional, Union
 
 from aiida import orm
-from node_graph.nodes.utils import generate_input_sockets, generate_output_sockets
+from node_graph.node_spec import BaseHandle
+from node_graph.socket_spec import infer_specs_from_callable
 
-from .ports_adapter import inputs_sockets_to_ports, outputs_sockets_to_ports
 from .utils import build_function_data, get_or_create_code, serialize_ports
 
 
@@ -16,8 +16,6 @@ def prepare_pythonjob_inputs(
     function_inputs: Optional[Dict[str, Any]] = None,
     inputs_spec: Optional[type] = None,
     outputs_spec: Optional[type] = None,
-    output_ports: Optional[Dict[str, Any]] = None,
-    input_ports: Optional[Dict[str, Any]] = None,
     code: Optional[orm.AbstractCode] = None,
     command_info: Optional[Dict[str, str]] = None,
     computer: Union[str, orm.Computer] = "localhost",
@@ -36,6 +34,8 @@ def prepare_pythonjob_inputs(
         raise ValueError("Either function or function_data must be provided")
     if function is not None and function_data is not None:
         raise ValueError("Only one of function or function_data should be provided")
+    if isinstance(function, BaseHandle):
+        function = function._func
     # if function is a function, inspect it and get the source code
     if function is not None and inspect.isfunction(function):
         function_data = build_function_data(function, register_pickle_by_value=register_pickle_by_value)
@@ -60,20 +60,12 @@ def prepare_pythonjob_inputs(
     if code is None:
         command_info = command_info or {}
         code = get_or_create_code(computer=computer, **command_info)
-    # outputs
-    if not output_ports:
-        node_outputs = generate_output_sockets(function or (lambda **_: None), outputs=outputs_spec)
-        output_ports = outputs_sockets_to_ports(node_outputs)
-    # inputs
-    if not input_ports:
-        node_inputs = generate_input_sockets(function or (lambda **_: None), inputs=inputs_spec)
-        input_ports = inputs_sockets_to_ports(node_inputs)
-
-    function_data["output_ports"] = output_ports
-    function_data["input_ports"] = input_ports
+    in_spec, out_spec = infer_specs_from_callable(function, inputs=inputs_spec, outputs=outputs_spec)
+    function_data["inputs_spec"] = in_spec.to_dict()
+    function_data["outputs_spec"] = out_spec.to_dict()
     # serialize kwargs against the (nested) input schema
     function_inputs = function_inputs or {}
-    function_inputs = serialize_ports(python_data=function_inputs, port_schema=input_ports, serializers=serializers)
+    function_inputs = serialize_ports(python_data=function_inputs, port_schema=in_spec, serializers=serializers)
     # replace "." with "__dot__" in the keys of a dictionary
     if deserializers:
         deserializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in deserializers.items()})
@@ -116,8 +108,6 @@ def prepare_pyfunction_inputs(
     function_inputs: Optional[Dict[str, Any]] = None,
     inputs_spec: Optional[type] = None,
     outputs_spec: Optional[type] = None,
-    output_ports: Optional[Dict[str, Any]] = None,
-    input_ports: Optional[Dict[str, Any]] = None,
     metadata: Optional[Dict[str, Any]] = None,
     process_label: Optional[str] = None,
     function_data: dict | None = None,
@@ -126,13 +116,15 @@ def prepare_pyfunction_inputs(
     register_pickle_by_value: bool = False,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    """Prepare the inputs for PythonJob"""
+    """Prepare the inputs for PyFunction."""
     import types
 
     if function is None and function_data is None:
         raise ValueError("Either function or function_data must be provided")
     if function is not None and function_data is not None:
         raise ValueError("Only one of function or function_data should be provided")
+    if isinstance(function, BaseHandle):
+        function = function._func
     # if function is a function, inspect it and get the source code
     if function is not None:
         if inspect.isfunction(function):
@@ -141,20 +133,13 @@ def prepare_pyfunction_inputs(
             raise NotImplementedError("Built-in functions are not supported yet")
         else:
             raise ValueError("Invalid function type")
-    # outputs
-    if not output_ports:
-        node_outputs = generate_output_sockets(function or (lambda **_: None), outputs=outputs_spec)
-        output_ports = outputs_sockets_to_ports(node_outputs)
-    # inputs
-    if not input_ports:
-        node_inputs = generate_input_sockets(function or (lambda **_: None), inputs=inputs_spec)
-        input_ports = inputs_sockets_to_ports(node_inputs)
-
-    function_data["output_ports"] = output_ports
-    function_data["input_ports"] = input_ports
+    # spec
+    in_spec, out_spec = infer_specs_from_callable(function, inputs=inputs_spec, outputs=outputs_spec)
+    function_data["inputs_spec"] = in_spec.to_dict()
+    function_data["outputs_spec"] = out_spec.to_dict()
     # serialize the kwargs into AiiDA Data
     function_inputs = function_inputs or {}
-    function_inputs = serialize_ports(python_data=function_inputs, port_schema=input_ports, serializers=serializers)
+    function_inputs = serialize_ports(python_data=function_inputs, port_schema=in_spec, serializers=serializers)
     # replace "." with "__dot__" in the keys of a dictionary
     if deserializers:
         deserializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in deserializers.items()})
