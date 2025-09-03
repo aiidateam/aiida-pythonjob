@@ -17,12 +17,13 @@ from aiida.orm import (
     Str,
     to_aiida_type,
 )
+from node_graph.socket_spec import SocketSpec
 
 __all__ = ("PyFunction",)
 
 
 class PyFunction(Process):
-    """"""
+    """Run a Python function in-process, using SocketSpec for I/O."""
 
     _node_class = CalcFunctionNode
 
@@ -53,8 +54,8 @@ class PyFunction(Process):
         """Define the process specification, including its inputs, outputs and known exit codes."""
         super().define(spec)
         spec.input_namespace("function_data", dynamic=True, required=True)
-        spec.input("function_data.output_ports", valid_type=Dict, serializer=to_aiida_type, required=False)
-        spec.input("function_data.input_ports", valid_type=Dict, serializer=to_aiida_type, required=False)
+        spec.input("function_data.outputs_spec", valid_type=Dict, serializer=to_aiida_type, required=False)
+        spec.input("function_data.inputs_spec", valid_type=Dict, serializer=to_aiida_type, required=False)
         spec.input("process_label", valid_type=Str, serializer=to_aiida_type, required=False)
         spec.input_namespace("function_inputs", valid_type=Data, required=False)
         spec.input(
@@ -160,11 +161,13 @@ class PyFunction(Process):
         else:
             self.deserializers = None
 
+        # Build input namespace (raw Python) from AiiDA inputs using the declared SocketSpec
         inputs = dict(self.inputs.function_inputs or {})
         try:
+            inputs_spec = SocketSpec.from_dict(self.node.inputs.function_data.inputs_spec.get_dict())
             inputs = deserialize_ports(
                 serialized_data=inputs,
-                port_schema=self.node.inputs.function_data.input_ports.get_dict(),
+                port_schema=inputs_spec,
                 deserializers=self.deserializers,
             )
         except Exception as exception:
@@ -174,6 +177,7 @@ class PyFunction(Process):
                 exception=exception_message, traceback=traceback_str
             )
 
+        # Execute user function
         try:
             results = self.func(**inputs)
         except Exception as exception:
@@ -182,16 +186,18 @@ class PyFunction(Process):
             return self.exit_codes.ERROR_FUNCTION_EXECUTION_FAILED.format(
                 exception=exception_message, traceback=traceback_str
             )
+
+        # Parse & output
         return self.parse(results)
 
     def parse(self, results):
-        """Parse the results of the function."""
-        from aiida_pythonjob.utils import parse_outputs
+        """Parse the results of the function and attach outputs."""
+        from aiida_pythonjob.parsers.utils import parse_outputs
 
-        self.output_ports = self.node.inputs.function_data.output_ports.get_dict()
-        exit_code = parse_outputs(
+        outputs_spec = SocketSpec.from_dict(self.node.inputs.function_data.outputs_spec.get_dict())
+        outputs, exit_code = parse_outputs(
             results,
-            output_ports=self.output_ports,
+            output_spec=outputs_spec,
             exit_codes=self.exit_codes,
             logger=self.logger,
             serializers=self.serializers,
@@ -199,8 +205,7 @@ class PyFunction(Process):
         if exit_code:
             return exit_code
         # Store the outputs
-        for name, port in self.output_ports["ports"].items():
-            if "value" in port:
-                self.out(name, port["value"])
+        for name, value in (outputs or {}).items():
+            self.out(name, value)
 
         return ExitCode()
