@@ -15,7 +15,7 @@ class CustomData:
         return {"name": self.name, "age": self.age, "array": self.array}
 
     @classmethod
-    def from_json(cls, data):
+    def from_dict(cls, data):
         return cls(data["name"], data["age"], data["array"])
 
 
