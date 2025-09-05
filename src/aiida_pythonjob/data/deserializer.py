@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from aiida import common, orm
+from plumpy.utils import AttributesFrozendict
 
 from .utils import import_from_path
 
@@ -55,14 +56,16 @@ def get_deserializer() -> dict:
 all_deserializers = get_deserializer()
 
 
-def deserialize_to_raw_python_data(data: orm.Node, deserializers: dict | None = None) -> Any:
+def deserialize_to_raw_python_data(
+    data: orm.Node | dict, deserializers: dict | None = None, dry_run: bool = False
+) -> Any:
     """Deserialize the AiiDA data node to an raw Python data."""
 
     deserializers = deserializers or {}
 
     if isinstance(data, orm.Data):
         if hasattr(data, "value"):
-            return getattr(data, "value")
+            return None if dry_run else getattr(data, "value")
         data_type = type(data)
         ep_key = f"{data_type.__module__}.{data_type.__name__}"
         if ep_key in deserializers:
@@ -80,6 +83,6 @@ def deserialize_to_raw_python_data(data: orm.Node, deserializers: dict | None = 
                 f"           '{ep_key}': 'my_package.my_module.my_deserializer'\n"
                 "       }"
             )
-    elif isinstance(data, (common.extendeddicts.AttributeDict, dict)):
+    elif isinstance(data, (common.extendeddicts.AttributeDict, AttributesFrozendict, dict)):
         # if the data is an AttributeDict, use it directly
         return {k: deserialize_to_raw_python_data(v, deserializers=deserializers) for k, v in data.items()}
