@@ -89,17 +89,14 @@ def prepare_pythonjob_inputs(
         valid, msg = validate_inputs(function, function_inputs)
         if not valid:
             raise ValueError(f"Invalid function inputs: {msg}")
-    # replace "." with "__dot__" in the keys of a dictionary
-    deserializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in deserializers.items()})
-    serializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in serializers.items()})
+    metadata["serializers"] = serializers
+    metadata["deserializers"] = deserializers
     inputs = {
         "function_data": function_data,
         "code": code,
         "function_inputs": function_inputs,
         "upload_files": new_upload_files,
         "metadata": metadata,
-        "deserializers": deserializers,
-        "serializers": serializers,
         **kwargs,
     }
     if process_label:
@@ -168,15 +165,12 @@ def prepare_pyfunction_inputs(
     function_inputs = serialize_ports(
         python_data=function_inputs, port_schema=in_spec, serializers=serializers, use_pickle=use_pickle
     )
-    # replace "." with "__dot__" in the keys of a dictionary
-    deserializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in deserializers.items()})
-    serializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in serializers.items()})
+    metadata["serializers"] = serializers
+    metadata["deserializers"] = deserializers
     inputs = {
         "function_data": function_data,
         "function_inputs": function_inputs,
         "metadata": metadata,
-        "deserializers": deserializers,
-        "serializers": serializers,
         **kwargs,
     }
     if process_label:

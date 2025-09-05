@@ -13,7 +13,6 @@ from aiida.engine.processes.exit_code import ExitCode
 from aiida.orm import (
     CalcFunctionNode,
     Data,
-    Dict,
     Str,
     to_aiida_type,
 )
@@ -64,19 +63,15 @@ class PyFunction(Process):
         spec.input("process_label", valid_type=Str, serializer=to_aiida_type, required=False)
         spec.input_namespace("function_inputs", valid_type=Data, required=False)
         spec.input(
-            "deserializers",
-            valid_type=Dict,
-            default=None,
+            "metadata.deserializers",
+            valid_type=dict,
             required=False,
-            serializer=to_aiida_type,
             help="The deserializers to convert the input AiiDA data nodes to raw Python data.",
         )
         spec.input(
-            "serializers",
-            valid_type=Dict,
-            default=None,
+            "metadata.serializers",
+            valid_type=dict,
             required=False,
-            serializer=to_aiida_type,
             help="The serializers to convert the raw Python data to AiiDA data nodes.",
         )
         spec.inputs.dynamic = True
@@ -112,6 +107,8 @@ class PyFunction(Process):
         outputs_spec = metadata.pop("outputs_spec", {})
         self.node.base.attributes.set("outputs_spec", outputs_spec)
         self.node.base.attributes.set("use_pickle", metadata.pop("use_pickle", False))
+        self.node.base.attributes.set("serializers", metadata.pop("serializers", {}))
+        self.node.base.attributes.set("deserializers", metadata.pop("deserializers", {}))
         super()._setup_metadata(metadata)
 
     def get_function_name(self) -> str:
@@ -161,25 +158,13 @@ class PyFunction(Process):
             return ExitCode(self.node.exit_status, self.node.exit_message)
 
         # load custom serializers
-        if "serializers" in self.node.inputs and self.node.inputs.serializers:
-            serializers = self.node.inputs.serializers.get_dict()
-            # replace "__dot__" with "." in the keys
-            self.serializers = {k.replace("__dot__", "."): v for k, v in serializers.items()}
-        else:
-            self.serializers = None
-        if "deserializers" in self.node.inputs and self.node.inputs.deserializers:
-            deserializers = self.node.inputs.deserializers.get_dict()
-            # replace "__dot__" with "." in the keys
-            self.deserializers = {k.replace("__dot__", "."): v for k, v in deserializers.items()}
-        else:
-            self.deserializers = None
-
+        deserializers = self.node.base.attributes.get("deserializers", {})
         # Build input namespace (raw Python) from AiiDA inputs using the declared SocketSpec
         inputs = dict(self.inputs.function_inputs or {})
         try:
             inputs = deserialize_to_raw_python_data(
                 inputs,
-                deserializers=self.deserializers,
+                deserializers=deserializers,
             )
         except Exception as exception:
             exception_message = str(exception)
@@ -207,12 +192,13 @@ class PyFunction(Process):
 
         outputs_spec = SocketSpec.from_dict(self.node.base.attributes.get("outputs_spec") or {})
         use_pickle = self.node.base.attributes.get("use_pickle", False)
+        serializers = self.node.base.attributes.get("serializers", {})
         outputs, exit_code = parse_outputs(
             results,
             output_spec=outputs_spec,
             exit_codes=self.exit_codes,
             logger=self.logger,
-            serializers=self.serializers,
+            serializers=serializers,
             use_pickle=use_pickle,
         )
         if exit_code:

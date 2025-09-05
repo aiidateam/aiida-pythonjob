@@ -12,7 +12,6 @@ from aiida.common.lang import override
 from aiida.engine import CalcJob, CalcJobProcessSpec
 from aiida.orm import (
     Data,
-    Dict,
     FolderData,
     List,
     RemoteData,
@@ -98,19 +97,15 @@ class PythonJob(CalcJob):
             help="Additional filenames to retrieve from the remote work directory",
         )
         spec.input(
-            "deserializers",
-            valid_type=Dict,
-            default=None,
+            "metadata.deserializers",
+            valid_type=dict,
             required=False,
-            serializer=to_aiida_type,
             help="The deserializers to convert the input AiiDA data nodes to raw Python data.",
         )
         spec.input(
-            "serializers",
-            valid_type=Dict,
-            default=None,
+            "metadata.serializers",
+            valid_type=dict,
             required=False,
-            serializer=to_aiida_type,
             help="The serializers to convert the raw Python data to AiiDA data nodes.",
         )
         spec.outputs.dynamic = True
@@ -189,6 +184,8 @@ class PythonJob(CalcJob):
         outputs_spec = metadata.pop("outputs_spec", {})
         self.node.base.attributes.set("outputs_spec", outputs_spec)
         self.node.base.attributes.set("use_pickle", metadata.pop("use_pickle", False))
+        self.node.base.attributes.set("serializers", metadata.pop("serializers", {}))
+        self.node.base.attributes.set("deserializers", metadata.pop("deserializers", {}))
         super()._setup_metadata(metadata)
 
     def get_function_name(self) -> str:
@@ -312,12 +309,7 @@ class PythonJob(CalcJob):
 
         # Create a pickle file for the user input values
         input_values = {}
-        if "deserializers" in self.inputs and self.inputs.deserializers:
-            deserializers = self.inputs.deserializers.get_dict()
-            # replace "__dot__" with "." in the keys
-            deserializers = {k.replace("__dot__", "."): v for k, v in deserializers.items()}
-        else:
-            deserializers = None
+        deserializers = self.node.base.attributes.get("deserializers", {})
         try:
             input_values = deserialize_to_raw_python_data(inputs, deserializers=deserializers)
         except Exception as exception:
