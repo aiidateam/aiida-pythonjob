@@ -6,7 +6,7 @@ from node_graph import socket_spec as spec
 
 from .calculations import PyFunction, PythonJob
 from .decorator import pyfunction
-from .launch import prepare_pythonjob_inputs
+from .launch import prepare_pyfunction_inputs, prepare_pythonjob_inputs
 from .parsers import PythonJobParser
 
 __all__ = (
@@ -15,6 +15,7 @@ __all__ = (
     "pyfunction",
     "PickledData",
     "prepare_pythonjob_inputs",
+    "prepare_pyfunction_inputs",
     "PythonJobParser",
     "spec",
 )

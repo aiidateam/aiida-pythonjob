@@ -6,8 +6,9 @@ def test_typing():
     """Test function with typing."""
     from typing import List
 
-    from aiida_pythonjob.utils import get_required_imports
     from numpy import array
+
+    from aiida_pythonjob.utils import get_required_imports
 
     def generate_structures(
         strain_lst: List[float],
@@ -38,7 +39,7 @@ def test_python_job():
     ):
         new_inputs = serialize_to_aiida_nodes(inputs)
     # Allow pickling
-    config["allow_pickle"] = True
+    config["use_pickle"] = True
     new_inputs = serialize_to_aiida_nodes(inputs)
     assert isinstance(new_inputs["a"], aiida.orm.Int)
     assert isinstance(new_inputs["b"], aiida.orm.Float)
@@ -46,8 +47,9 @@ def test_python_job():
 
 
 def test_atoms_data():
-    from aiida_pythonjob.data.atoms import AtomsData
     from ase.build import bulk
+
+    from aiida_pythonjob.data.atoms import AtomsData
 
     atoms = bulk("Si")
 
@@ -70,6 +72,7 @@ def test_only_data_with_value():
 
 def test_deserializer():
     import numpy as np
+
     from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
 
     data = aiida.orm.ArrayData()

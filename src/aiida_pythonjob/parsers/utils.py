@@ -35,6 +35,7 @@ def parse_outputs(
     exit_codes,
     logger,
     serializers: Optional[Dict[str, str]] = None,
+    use_pickle: bool = False,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[ExitCode]]:
     """Validate & convert *results* according to *output_spec*.
 
@@ -59,7 +60,7 @@ def parse_outputs(
         for i, name in enumerate(names):
             child_spec = fields[name]
             val = results[i]
-            outs[name] = serialize_ports(val, child_spec, serializers=serializers)
+            outs[name] = serialize_ports(val, child_spec, serializers=serializers, use_pickle=use_pickle)
         return outs, None
 
     # dict
@@ -84,19 +85,21 @@ def parse_outputs(
             ((only_name, only_spec),) = fields.items()
             # if user used the same key as port name, use that value;
             if only_name in results:
-                outs[only_name] = serialize_ports(results.pop(only_name), only_spec, serializers=serializers)
+                outs[only_name] = serialize_ports(
+                    results.pop(only_name), only_spec, serializers=serializers, use_pickle=use_pickle
+                )
                 if results:
                     logger.warning(f"Found extra results that are not included in the output: {list(results.keys())}")
             else:
                 # else treat the entire dict as the value for that single port.
-                outs[only_name] = serialize_ports(results, only_spec, serializers=serializers)
+                outs[only_name] = serialize_ports(results, only_spec, serializers=serializers, use_pickle=use_pickle)
             return outs, None
 
         # fixed fields
         for name, child_spec in fields.items():
             if name in remaining:
                 value = remaining.pop(name)
-                outs[name] = serialize_ports(value, child_spec, serializers=serializers)
+                outs[name] = serialize_ports(value, child_spec, serializers=serializers, use_pickle=use_pickle)
             else:
                 # If the field is explicitly required -> invalid output
                 required = getattr(child_spec.meta, "required", None)
@@ -109,7 +112,10 @@ def parse_outputs(
                 logger.warning("Outputs marked dynamic but missing 'item' schema; treating as ANY.")
             for name, value in remaining.items():
                 outs[name] = serialize_ports(
-                    value, item_spec or SocketSpec(identifier="node_graph.any"), serializers=serializers
+                    value,
+                    item_spec or SocketSpec(identifier="node_graph.any"),
+                    serializers=serializers,
+                    use_pickle=use_pickle,
                 )
             return outs, None
         # not dynamic -> leftovers are unexpected (warn but continue)
@@ -120,6 +126,6 @@ def parse_outputs(
     # single fixed output + non-dict/tuple scalar
     if len(fields) == 1 and not is_dyn:
         ((only_name, only_spec),) = fields.items()
-        return {only_name: serialize_ports(results, only_spec, serializers=serializers)}, None
+        return {only_name: serialize_ports(results, only_spec, serializers=serializers, use_pickle=use_pickle)}, None
 
     return None, exit_codes.ERROR_RESULT_OUTPUT_MISMATCH

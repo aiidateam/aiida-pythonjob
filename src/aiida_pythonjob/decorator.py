@@ -22,6 +22,7 @@ LOGGER = logging.getLogger(__name__)
 def pyfunction(
     inputs: t.Optional[SocketSpec | List[str]] = None,
     outputs: t.Optional[t.List[SocketSpec | List[str]]] = None,
+    use_pickle: bool | None = None,
 ) -> t.Callable[[FunctionType], FunctionType]:
     """The base function decorator to create a FunctionProcess out of a normal python function.
 
@@ -82,6 +83,7 @@ def pyfunction(
                 deserializers=deserializers,
                 serializers=serializers,
                 register_pickle_by_value=register_pickle_by_value,
+                use_pickle=use_pickle,
             )
 
             process = PyFunction(inputs=process_inputs, runner=runner)

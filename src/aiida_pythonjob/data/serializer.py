@@ -99,6 +99,7 @@ def general_serializer(
     deserializers: dict | None = None,
     check_value: bool = True,
     store: bool = True,
+    use_pickle: bool | None = None,
 ) -> orm.Node:
     """
     Attempt to serialize the data to an AiiDA data node based on the preference from `config`:
@@ -108,7 +109,8 @@ def general_serializer(
 
     # Merge user-provided config with defaults
     allow_json = config.get("allow_json", True)
-    allow_pickle = config.get("allow_pickle", False)
+    if use_pickle is None:
+        use_pickle = config.get("use_pickle", False)
 
     updated_deserializers = all_deserializers.copy()
     if deserializers is not None:
@@ -156,7 +158,7 @@ def general_serializer(
             pass
 
     # fallback to pickling
-    if allow_pickle:
+    if use_pickle:
         from .pickled_data import PickledData
 
         try:
@@ -169,5 +171,5 @@ def general_serializer(
 
     raise ValueError(
         f"Cannot serialize type={type(data).__name__}. No suitable method found "
-        f"(json_allowed={allow_json}, pickle_allowed={allow_pickle})."
+        f"(json_allowed={allow_json}, pickle_allowed={use_pickle})."
     )
