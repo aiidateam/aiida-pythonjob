@@ -58,21 +58,28 @@ all_deserializers = get_deserializer()
 def deserialize_to_raw_python_data(data: orm.Node, deserializers: dict | None = None) -> Any:
     """Deserialize the AiiDA data node to an raw Python data."""
 
-    updated_deserializers = all_deserializers.copy()
-
-    if deserializers is not None:
-        updated_deserializers.update(deserializers)
+    deserializers = deserializers or {}
 
     if isinstance(data, orm.Data):
         if hasattr(data, "value"):
             return getattr(data, "value")
         data_type = type(data)
         ep_key = f"{data_type.__module__}.{data_type.__name__}"
-        if ep_key in updated_deserializers:
-            deserializer = import_from_path(updated_deserializers[ep_key])
+        if ep_key in deserializers:
+            deserializer = import_from_path(deserializers[ep_key])
             return deserializer(data)
         else:
-            raise ValueError(f"AiiDA data: {ep_key}, does not have a value attribute or deserializer.")
+            raise ValueError(
+                f"Cannot deserialize AiiDA data of type `{ep_key}`. "
+                "This type does not define a `.value` attribute, and no matching "
+                f"deserializer was provided in `deserializers` for key `{ep_key}`. "
+                "To fix this, either:\n"
+                "  1. Use a Data type with a `.value` property, or\n"
+                "  2. Provide a custom deserializer in `deserializers`, e.g.:\n"
+                "       deserializers = {\n"
+                f"           '{ep_key}': 'my_package.my_module.my_deserializer'\n"
+                "       }"
+            )
     elif isinstance(data, (common.extendeddicts.AttributeDict, dict)):
         # if the data is an AttributeDict, use it directly
         return {k: deserialize_to_raw_python_data(v, deserializers=deserializers) for k, v in data.items()}

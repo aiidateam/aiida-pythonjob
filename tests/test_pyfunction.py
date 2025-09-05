@@ -249,3 +249,14 @@ def test_dynamic_rows():
     # outputs should be serialized as dynamic rows
     assert node.outputs.sum.value == 1
     assert node.outputs.data_0.sum.value == 0
+
+
+def test_only_data_with_value():
+    from aiida import orm
+
+    @pyfunction()
+    def add(x, y):
+        return x + y
+
+    _, node = run_get_node(add, x=1, y=orm.XyData())
+    assert node.exit_status == 320
