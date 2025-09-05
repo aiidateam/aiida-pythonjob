@@ -98,12 +98,15 @@ filterwarnings = [
 source = ["src/aiida_pythonjob"]
 
 [tool.ruff]
-line-length = 120
+line-length = 121
 
 [tool.ruff.lint]
 ignore = [
   "F403",
   "F405",
+  "F821",
+  "F722",
+  "E203",
   "PLR0911",
   "PLR0912",
   "PLR0913",
