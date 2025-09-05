@@ -61,7 +61,7 @@ def deserialize_to_raw_python_data(
 ) -> Any:
     """Deserialize the AiiDA data node to an raw Python data."""
 
-    deserializers = deserializers or {}
+    deserializers = deserializers or all_deserializers
 
     if isinstance(data, orm.Data):
         if hasattr(data, "value"):

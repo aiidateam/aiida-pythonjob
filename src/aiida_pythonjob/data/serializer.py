@@ -104,6 +104,8 @@ def general_serializer(
     """
     from aiida_pythonjob.config import config
 
+    serializers = serializers or all_serializers
+
     # Merge user-provided config with defaults
     allow_json = config.get("allow_json", True)
     if use_pickle is None:
@@ -119,7 +121,6 @@ def general_serializer(
     # 3) check entry point
     data_type = type(data)
     ep_key = f"{data_type.__module__}.{data_type.__name__}"
-    serializers = serializers or {}
     if ep_key in serializers:
         try:
             serializer = import_from_path(serializers[ep_key])
