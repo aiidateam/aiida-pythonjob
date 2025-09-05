@@ -10,23 +10,29 @@ import plumpy
 from aiida.common.lang import override
 from aiida.engine import Process, ProcessSpec
 from aiida.engine.processes.exit_code import ExitCode
-from aiida.orm import (
-    CalcFunctionNode,
-    Data,
-    Str,
-    to_aiida_type,
-)
+from aiida.orm import CalcFunctionNode
 from node_graph.socket_spec import SocketSpec
 
+from aiida_pythonjob.calculations.common import (
+    ATTR_DESERIALIZERS,
+    ATTR_OUTPUTS_SPEC,
+    ATTR_SERIALIZERS,
+    ATTR_USE_PICKLE,
+    FunctionProcessMixin,
+    add_common_function_io,
+)
 from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
+from aiida_pythonjob.parsers.utils import parse_outputs
 
 __all__ = ("PyFunction",)
 
 
-class PyFunction(Process):
-    """Run a Python function in-process, using SocketSpec for I/O."""
+class PyFunction(FunctionProcessMixin, Process):
+    """Run a Python function in-process, using :class:`SocketSpec` for I/O."""
 
     _node_class = CalcFunctionNode
+    label_template = "{name}"
+    default_name = "anonymous_function"
 
     def __init__(self, *args, **kwargs) -> None:
         if kwargs.get("enable_persistence", False):
@@ -38,10 +44,8 @@ class PyFunction(Process):
     def load_instance_state(
         self, saved_state: t.MutableMapping[str, t.Any], load_context: plumpy.persistence.LoadSaveContext
     ) -> None:
-        """Load the instance state from the saved state."""
-
+        """Load the instance state (restore pickled function)."""
         super().load_instance_state(saved_state, load_context)
-        # Restore the function from the pickled data
         self._func = cloudpickle.loads(self.inputs.function_data.pickled_function)
 
     @property
@@ -50,158 +54,69 @@ class PyFunction(Process):
             self._func = cloudpickle.loads(self.inputs.function_data.pickled_function)
         return self._func
 
+    def _extract_declared_name(self) -> str | None:
+        name = super()._extract_declared_name()
+        if name:
+            return name
+        try:
+            return self.func.__name__
+        except Exception:
+            return None
+
     @classmethod
     def define(cls, spec: ProcessSpec) -> None:  # type: ignore[override]
-        """Define the process specification, including its inputs, outputs and known exit codes."""
+        """Define inputs/outputs and exit codes."""
         super().define(spec)
-        spec.input_namespace("function_data", dynamic=True, required=True)
-        spec.input("metadata.outputs_spec", valid_type=dict, required=False, help="Specification for the outputs.")
-        spec.input(
-            "metadata.use_pickle",
-            valid_type=bool,
-            required=False,
-            help="Allow pickling of function inputs and outputs.",
-        )
-        spec.input("process_label", valid_type=Str, serializer=to_aiida_type, required=False)
-        spec.input_namespace("function_inputs", valid_type=Data, required=False)
-        spec.input(
-            "metadata.deserializers",
-            valid_type=dict,
-            required=False,
-            help="The deserializers to convert the input AiiDA data nodes to raw Python data.",
-        )
-        spec.input(
-            "metadata.serializers",
-            valid_type=dict,
-            required=False,
-            help="The serializers to convert the raw Python data to AiiDA data nodes.",
-        )
-        spec.inputs.validator = cls.validate_inputs
+        add_common_function_io(spec)
         spec.inputs.dynamic = True
         spec.outputs.dynamic = True
         spec.exit_code(
-            320,
-            "ERROR_DESERIALIZE_INPUTS_FAILED",
-            invalidates_cache=True,
-            message="Failed to unpickle inputs.\n{exception}\n{traceback}",
-        )
-        spec.exit_code(
-            321,
+            323,
             "ERROR_FUNCTION_EXECUTION_FAILED",
             invalidates_cache=True,
             message="Function execution failed.\n{exception}\n{traceback}",
         )
-        spec.exit_code(
-            322,
-            "ERROR_INVALID_OUTPUT",
-            invalidates_cache=True,
-            message="The output file contains invalid output.",
-        )
-        spec.exit_code(
-            323,
-            "ERROR_RESULT_OUTPUT_MISMATCH",
-            invalidates_cache=True,
-            message="The number of results does not match the number of outputs.",
-        )
-
-    @staticmethod
-    def validate_inputs(inputs, _):
-        """Validator for the 'function_inputs' namespace."""
-        deserializers = inputs.get("metadata", {}).get("deserializers", {})
-        # this will raise if if the input data cannot be deserialized
-        deserialize_to_raw_python_data(inputs["function_inputs"], deserializers=deserializers, dry_run=True)
-
-    def _setup_metadata(self, metadata: dict) -> None:
-        """Store the metadata on the ProcessNode."""
-
-        outputs_spec = metadata.pop("outputs_spec", {})
-        self.node.base.attributes.set("outputs_spec", outputs_spec)
-        self.node.base.attributes.set("use_pickle", metadata.pop("use_pickle", False))
-        self.node.base.attributes.set("serializers", metadata.pop("serializers", {}))
-        self.node.base.attributes.set("deserializers", metadata.pop("deserializers", {}))
-        super()._setup_metadata(metadata)
-
-    def get_function_name(self) -> str:
-        """Return the name of the function to run."""
-        if "name" in self.inputs.function_data:
-            name = self.inputs.function_data.name
-        else:
-            try:
-                name = self.func.__name__
-            except AttributeError:
-                # If a user doesn't specify name, fallback to something generic
-                name = "anonymous_function"
-        return name
-
-    def _build_process_label(self) -> str:
-        """Use the function name or an explicit label as the process label."""
-        if "process_label" in self.inputs:
-            return self.inputs.process_label.value
-        else:
-            name = self.get_function_name()
-            return f"{name}"
 
     @override
     def _setup_db_record(self) -> None:
-        """Set up the database record for the process."""
         super()._setup_db_record()
         self.node.store_source_info(self.func)
 
     def execute(self) -> dict[str, t.Any] | None:
-        """Execute the process."""
+        """Mirror calcfunction behavior: unwrap single-output dicts to a bare value."""
         result = super().execute()
-
-        # FunctionProcesses can return a single value as output, and not a dictionary, so we should also return that
         if result and len(result) == 1 and self.SINGLE_OUTPUT_LINKNAME in result:
             return result[self.SINGLE_OUTPUT_LINKNAME]
-
         return result
 
     @override
     def run(self) -> ExitCode | None:
-        """Run the process."""
-
-        # The following conditional is required for the caching to properly work.
-        # From the the calcfunction implementation in aiida-core
+        # Respect caching semantics (from aiida-core calcfunction implementation)
         if self.node.exit_status is not None:
             return ExitCode(self.node.exit_status, self.node.exit_message)
 
-        # load custom serializers
-        deserializers = self.node.base.attributes.get("deserializers", {})
-        # Build input namespace (raw Python) from AiiDA inputs using the declared SocketSpec
-        inputs = dict(self.inputs.function_inputs or {})
+        # Deserialize inputs
         try:
-            inputs = deserialize_to_raw_python_data(
-                inputs,
-                deserializers=deserializers,
-            )
+            inputs = dict(self.inputs.function_inputs or {})
+            deserializers = self.node.base.attributes.get(ATTR_DESERIALIZERS, {})
+            inputs = deserialize_to_raw_python_data(inputs, deserializers=deserializers)
         except Exception as exception:
-            exception_message = str(exception)
-            traceback_str = traceback.format_exc()
             return self.exit_codes.ERROR_DESERIALIZE_INPUTS_FAILED.format(
-                exception=exception_message, traceback=traceback_str
+                exception=str(exception), traceback=traceback.format_exc()
             )
 
-        # Execute user function
+        # Execute function
         try:
             results = self.func(**inputs)
         except Exception as exception:
-            exception_message = str(exception)
-            traceback_str = traceback.format_exc()
             return self.exit_codes.ERROR_FUNCTION_EXECUTION_FAILED.format(
-                exception=exception_message, traceback=traceback_str
+                exception=str(exception), traceback=traceback.format_exc()
             )
 
-        # Parse & output
-        return self.parse(results)
-
-    def parse(self, results):
-        """Parse the results of the function and attach outputs."""
-        from aiida_pythonjob.parsers.utils import parse_outputs
-
-        outputs_spec = SocketSpec.from_dict(self.node.base.attributes.get("outputs_spec") or {})
-        use_pickle = self.node.base.attributes.get("use_pickle", False)
-        serializers = self.node.base.attributes.get("serializers", {})
+        # Parse & attach outputs
+        outputs_spec = SocketSpec.from_dict(self.node.base.attributes.get(ATTR_OUTPUTS_SPEC) or {})
+        use_pickle = self.node.base.attributes.get(ATTR_USE_PICKLE, False)
+        serializers = self.node.base.attributes.get(ATTR_SERIALIZERS, {})
         outputs, exit_code = parse_outputs(
             results,
             output_spec=outputs_spec,
@@ -212,8 +127,7 @@ class PyFunction(Process):
         )
         if exit_code:
             return exit_code
-        # Store the outputs
+
         for name, value in (outputs or {}).items():
             self.out(name, value)
-
         return ExitCode()

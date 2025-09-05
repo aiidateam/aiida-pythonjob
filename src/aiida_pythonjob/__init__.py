@@ -10,12 +10,12 @@ from .launch import prepare_pyfunction_inputs, prepare_pythonjob_inputs
 from .parsers import PythonJobParser
 
 __all__ = (
-    "PythonJob",
-    "PyFunction",
-    "pyfunction",
     "PickledData",
-    "prepare_pythonjob_inputs",
-    "prepare_pyfunction_inputs",
+    "PyFunction",
+    "PythonJob",
     "PythonJobParser",
+    "prepare_pyfunction_inputs",
+    "prepare_pythonjob_inputs",
+    "pyfunction",
     "spec",
 )

@@ -149,7 +149,7 @@ def test_function_execution_failed():
         return math.sqrt(x)
 
     _, node = run_get_node(add, x=-2)
-    assert node.exit_status == 321
+    assert node.exit_status == 323
 
 
 def test_exit_code():
