@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pathlib
+import traceback
 import typing as t
 
 from aiida.common.datastructures import CalcInfo, CodeInfo
@@ -45,8 +46,7 @@ class PythonJob(CalcJob):
         """Define the process specification, including its inputs, outputs and known exit codes."""
         super().define(spec)
         spec.input_namespace("function_data", dynamic=True, required=True)
-        spec.input("function_data.inputs_spec", valid_type=Dict, serializer=to_aiida_type, required=False)
-        spec.input("function_data.outputs_spec", valid_type=Dict, serializer=to_aiida_type, required=False)
+        spec.input("metadata.outputs_spec", valid_type=dict, required=False, help="Specification for the outputs.")
         spec.input("process_label", valid_type=Str, serializer=to_aiida_type, required=False)
         spec.input_namespace("function_inputs", valid_type=Data, required=False)
         spec.input(
@@ -124,52 +124,65 @@ class PythonJob(CalcJob):
         )
         spec.exit_code(
             320,
+            "ERROR_DESERIALIZE_INPUTS_FAILED",
+            invalidates_cache=True,
+            message="Failed to unpickle inputs.\n{exception}\n{traceback}",
+        )
+        spec.exit_code(
+            321,
             "ERROR_INVALID_OUTPUT",
             invalidates_cache=True,
             message="The output file contains invalid output.",
         )
         spec.exit_code(
-            321,
+            322,
             "ERROR_RESULT_OUTPUT_MISMATCH",
             invalidates_cache=True,
             message="The number of results does not match the number of outputs.",
         )
         spec.exit_code(
-            322,
+            323,
             "ERROR_IMPORT_CLOUDPICKLE_FAILED",
             invalidates_cache=True,
             message="Importing cloudpickle failed.\n{exception}\n{traceback}",
         )
         spec.exit_code(
-            323,
+            324,
             "ERROR_UNPICKLE_INPUTS_FAILED",
             invalidates_cache=True,
             message="Failed to unpickle inputs.\n{exception}\n{traceback}",
         )
         spec.exit_code(
-            324,
+            325,
             "ERROR_UNPICKLE_FUNCTION_FAILED",
             invalidates_cache=True,
             message="Failed to unpickle user function.\n{exception}\n{traceback}",
         )
         spec.exit_code(
-            325,
+            326,
             "ERROR_FUNCTION_EXECUTION_FAILED",
             invalidates_cache=True,
             message="Function execution failed.\n{exception}\n{traceback}",
         )
         spec.exit_code(
-            326,
+            327,
             "ERROR_PICKLE_RESULTS_FAILED",
             invalidates_cache=True,
             message="Failed to pickle results.\n{exception}\n{traceback}",
         )
         spec.exit_code(
-            327,
+            328,
             "ERROR_SCRIPT_FAILED",
             invalidates_cache=True,
             message="The script failed for an unknown reason.\n{exception}\n{traceback}",
         )
+
+    def _setup_metadata(self, metadata: dict) -> None:
+        """Store the metadata on the ProcessNode."""
+
+        outputs_spec = metadata.pop("outputs_spec", {})
+        self.node.base.attributes.set("outputs_spec", outputs_spec)
+        super()._setup_metadata(metadata)
 
     def get_function_name(self) -> str:
         """Return the name of the function to run."""
@@ -298,7 +311,14 @@ class PythonJob(CalcJob):
             deserializers = {k.replace("__dot__", "."): v for k, v in deserializers.items()}
         else:
             deserializers = None
-        input_values = deserialize_to_raw_python_data(inputs, deserializers=deserializers)
+        try:
+            input_values = deserialize_to_raw_python_data(inputs, deserializers=deserializers)
+        except Exception as exception:
+            exception_message = str(exception)
+            traceback_str = traceback.format_exc()
+            return self.exit_codes.ERROR_DESERIALIZE_INPUTS_FAILED.format(
+                exception=exception_message, traceback=traceback_str
+            )
 
         filename = "inputs.pickle"
         with folder.open(filename, "wb") as handle:

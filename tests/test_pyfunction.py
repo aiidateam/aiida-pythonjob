@@ -1,7 +1,8 @@
 from aiida import orm
 from aiida.engine import run_get_node
-from aiida_pythonjob import pyfunction
 from node_graph import socket_spec as spec
+
+from aiida_pythonjob import pyfunction
 
 
 def test_function_default_outputs(fixture_localhost):
@@ -136,7 +137,7 @@ def test_function_execution_failed():
         return math.sqrt(x)
 
     _, node = run_get_node(add, x=-2)
-    assert node.exit_status == 325
+    assert node.exit_status == 321
 
 
 def test_exit_code():

@@ -54,8 +54,7 @@ class PyFunction(Process):
         """Define the process specification, including its inputs, outputs and known exit codes."""
         super().define(spec)
         spec.input_namespace("function_data", dynamic=True, required=True)
-        spec.input("function_data.outputs_spec", valid_type=Dict, serializer=to_aiida_type, required=False)
-        spec.input("function_data.inputs_spec", valid_type=Dict, serializer=to_aiida_type, required=False)
+        spec.input("metadata.outputs_spec", valid_type=dict, required=False, help="Specification for the outputs.")
         spec.input("process_label", valid_type=Str, serializer=to_aiida_type, required=False)
         spec.input_namespace("function_inputs", valid_type=Data, required=False)
         spec.input(
@@ -78,28 +77,35 @@ class PyFunction(Process):
         spec.outputs.dynamic = True
         spec.exit_code(
             320,
-            "ERROR_INVALID_OUTPUT",
-            invalidates_cache=True,
-            message="The output file contains invalid output.",
-        )
-        spec.exit_code(
-            321,
-            "ERROR_RESULT_OUTPUT_MISMATCH",
-            invalidates_cache=True,
-            message="The number of results does not match the number of outputs.",
-        )
-        spec.exit_code(
-            323,
             "ERROR_DESERIALIZE_INPUTS_FAILED",
             invalidates_cache=True,
             message="Failed to unpickle inputs.\n{exception}\n{traceback}",
         )
         spec.exit_code(
-            325,
+            321,
             "ERROR_FUNCTION_EXECUTION_FAILED",
             invalidates_cache=True,
             message="Function execution failed.\n{exception}\n{traceback}",
         )
+        spec.exit_code(
+            322,
+            "ERROR_INVALID_OUTPUT",
+            invalidates_cache=True,
+            message="The output file contains invalid output.",
+        )
+        spec.exit_code(
+            323,
+            "ERROR_RESULT_OUTPUT_MISMATCH",
+            invalidates_cache=True,
+            message="The number of results does not match the number of outputs.",
+        )
+
+    def _setup_metadata(self, metadata: dict) -> None:
+        """Store the metadata on the ProcessNode."""
+
+        outputs_spec = metadata.pop("outputs_spec", {})
+        self.node.base.attributes.set("outputs_spec", outputs_spec)
+        super()._setup_metadata(metadata)
 
     def get_function_name(self) -> str:
         """Return the name of the function to run."""
@@ -140,7 +146,7 @@ class PyFunction(Process):
     @override
     def run(self) -> ExitCode | None:
         """Run the process."""
-        from aiida_pythonjob.utils import deserialize_ports
+        from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
 
         # The following conditional is required for the caching to properly work.
         # From the the calcfunction implementation in aiida-core
@@ -164,10 +170,8 @@ class PyFunction(Process):
         # Build input namespace (raw Python) from AiiDA inputs using the declared SocketSpec
         inputs = dict(self.inputs.function_inputs or {})
         try:
-            inputs_spec = SocketSpec.from_dict(self.node.inputs.function_data.inputs_spec.get_dict())
-            inputs = deserialize_ports(
-                serialized_data=inputs,
-                port_schema=inputs_spec,
+            inputs = deserialize_to_raw_python_data(
+                inputs,
                 deserializers=self.deserializers,
             )
         except Exception as exception:
@@ -194,7 +198,7 @@ class PyFunction(Process):
         """Parse the results of the function and attach outputs."""
         from aiida_pythonjob.parsers.utils import parse_outputs
 
-        outputs_spec = SocketSpec.from_dict(self.node.inputs.function_data.outputs_spec.get_dict())
+        outputs_spec = SocketSpec.from_dict(self.node.base.attributes.get("outputs_spec") or {})
         outputs, exit_code = parse_outputs(
             results,
             output_spec=outputs_spec,

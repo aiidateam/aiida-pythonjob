@@ -61,7 +61,7 @@ class JsonableData(orm.Data):
                 return method()
 
         raise TypeError(
-            f"Object `{obj}` does not have any of the following dictionary-conversion " f"methods: {self._DICT_METHODS}"
+            f"Object `{obj}` does not have any of the following dictionary-conversion methods: {self._DICT_METHODS}"
         )
 
     def _make_jsonable(self, data: typing.Any) -> typing.Any:
