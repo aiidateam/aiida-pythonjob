@@ -147,6 +147,8 @@ def prepare_pyfunction_inputs(
         raise ValueError("Only one of function or function_data should be provided")
     if isinstance(function, BaseHandle):
         function = function._func
+    elif hasattr(function, "is_process_function") and function.is_process_function:
+        function = function.func
     # if function is a function, inspect it and get the source code
     if function is not None:
         if inspect.isfunction(function):
