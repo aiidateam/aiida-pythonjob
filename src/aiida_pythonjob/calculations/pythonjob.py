@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pathlib
-import traceback
 import typing as t
 
 from aiida.common.datastructures import CalcInfo, CodeInfo
@@ -19,6 +18,8 @@ from aiida.orm import (
     Str,
     to_aiida_type,
 )
+
+from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
 
 __all__ = ("PythonJob",)
 
@@ -108,6 +109,7 @@ class PythonJob(CalcJob):
             required=False,
             help="The serializers to convert the raw Python data to AiiDA data nodes.",
         )
+        spec.inputs.validator = cls.validate_inputs
         spec.outputs.dynamic = True
         # set default options (optional)
         spec.inputs["metadata"]["options"]["parser_name"].default = "pythonjob.pythonjob"
@@ -178,6 +180,13 @@ class PythonJob(CalcJob):
             message="The script failed for an unknown reason.\n{exception}\n{traceback}",
         )
 
+    @staticmethod
+    def validate_inputs(inputs, _):
+        """Validator for the 'function_inputs' namespace."""
+        deserializers = inputs.get("metadata", {}).get("deserializers", {})
+        # this will raise if if the input data cannot be deserialized
+        deserialize_to_raw_python_data(inputs["function_inputs"], deserializers=deserializers, dry_run=True)
+
     def _setup_metadata(self, metadata: dict) -> None:
         """Store the metadata on the ProcessNode."""
 
@@ -225,7 +234,6 @@ class PythonJob(CalcJob):
         import cloudpickle as pickle
 
         from aiida_pythonjob.calculations.utils import generate_script_py
-        from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
 
         dirpath = pathlib.Path(folder._abspath)
 
@@ -310,14 +318,7 @@ class PythonJob(CalcJob):
         # Create a pickle file for the user input values
         input_values = {}
         deserializers = self.node.base.attributes.get("deserializers", {})
-        try:
-            input_values = deserialize_to_raw_python_data(inputs, deserializers=deserializers)
-        except Exception as exception:
-            exception_message = str(exception)
-            traceback_str = traceback.format_exc()
-            return self.exit_codes.ERROR_DESERIALIZE_INPUTS_FAILED.format(
-                exception=exception_message, traceback=traceback_str
-            )
+        input_values = deserialize_to_raw_python_data(inputs, deserializers=deserializers)
 
         filename = "inputs.pickle"
         with folder.open(filename, "wb") as handle:

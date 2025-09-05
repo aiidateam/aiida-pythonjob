@@ -1,3 +1,4 @@
+import pytest
 from aiida import orm
 from aiida.engine import run_get_node
 from node_graph import socket_spec as spec
@@ -269,5 +270,5 @@ def test_only_data_with_value():
     def add(x, y):
         return x + y
 
-    _, node = run_get_node(add, x=1, y=orm.XyData())
-    assert node.exit_status == 320
+    with pytest.raises(ValueError, match="Cannot deserialize AiiDA data of type"):
+        run_get_node(add, x=1, y=orm.XyData())

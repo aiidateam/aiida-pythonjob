@@ -18,6 +18,8 @@ from aiida.orm import (
 )
 from node_graph.socket_spec import SocketSpec
 
+from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
+
 __all__ = ("PyFunction",)
 
 
@@ -74,6 +76,7 @@ class PyFunction(Process):
             required=False,
             help="The serializers to convert the raw Python data to AiiDA data nodes.",
         )
+        spec.inputs.validator = cls.validate_inputs
         spec.inputs.dynamic = True
         spec.outputs.dynamic = True
         spec.exit_code(
@@ -100,6 +103,13 @@ class PyFunction(Process):
             invalidates_cache=True,
             message="The number of results does not match the number of outputs.",
         )
+
+    @staticmethod
+    def validate_inputs(inputs, _):
+        """Validator for the 'function_inputs' namespace."""
+        deserializers = inputs.get("metadata", {}).get("deserializers", {})
+        # this will raise if if the input data cannot be deserialized
+        deserialize_to_raw_python_data(inputs["function_inputs"], deserializers=deserializers, dry_run=True)
 
     def _setup_metadata(self, metadata: dict) -> None:
         """Store the metadata on the ProcessNode."""
@@ -150,7 +160,6 @@ class PyFunction(Process):
     @override
     def run(self) -> ExitCode | None:
         """Run the process."""
-        from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
 
         # The following conditional is required for the caching to properly work.
         # From the the calcfunction implementation in aiida-core
