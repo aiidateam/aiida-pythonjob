@@ -49,7 +49,7 @@ class JsonableData(orm.Data):
         if not any(hasattr(obj, method) for method in self._DICT_METHODS):
             raise ValueError(f"The object must have at least one of the following methods: {self._DICT_METHODS}")
         if not any(hasattr(obj, method) for method in self._FROM_DICT_METHODS):
-            raise ValueError(f"The class must have at least one of the following methods: {self._FROM_DICT_METHODS}")
+            raise ValueError(f"The object must have at least one of the following methods: {self._FROM_DICT_METHODS}")
 
     def _extract_dict(self, obj: typing.Any) -> dict:
         """
@@ -61,7 +61,7 @@ class JsonableData(orm.Data):
                 return method()
 
         raise TypeError(
-            f"Object `{obj}` does not have any of the following dictionary-conversion " f"methods: {self._DICT_METHODS}"
+            f"Object `{obj}` does not have any of the following dictionary-conversion methods: {self._DICT_METHODS}"
         )
 
     def _make_jsonable(self, data: typing.Any) -> typing.Any:

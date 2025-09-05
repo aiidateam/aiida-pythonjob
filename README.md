@@ -1,6 +1,6 @@
 # AiiDA-PythonJob
 [![PyPI version](https://badge.fury.io/py/aiida-pythonjob.svg)](https://badge.fury.io/py/aiida-pythonjob)
-[![Unit test](https://github.com/aiidateam/aiida-pythonjob/actions/workflows/ci.yml/badge.svg)](https://github.com/aiidateam/aiida-pythonjob/actions/workflows/ci.yml)
+[![Unit test](https://github.com/aiidateam/aiida-pythonjob/actions/workflows/ci-tests.yml/badge.svg)](https://github.com/aiidateam/aiida-pythonjob/actions/workflows/ci-tests.yml)
 [![codecov](https://codecov.io/gh/aiidateam/aiida-pythonjob/branch/main/graph/badge.svg)](https://codecov.io/gh/aiidateam/aiida-pythonjob)
 [![Docs status](https://readthedocs.org/projects/aiida-pythonjob/badge)](http://aiida-pythonjob.readthedocs.io/)
 

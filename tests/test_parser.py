@@ -29,32 +29,31 @@ def create_retrieved_folder(result: dict, error: dict | None = None, output_file
 
 
 def create_process_node(
-    result: dict, function_data: dict, error: dict | None = None, output_filename: str = "results.pickle"
+    result: dict, spec_data: dict, error: dict | None = None, output_filename: str = "results.pickle"
 ):
     node = orm.CalcJobNode()
     node.set_process_type("aiida.calculations:pythonjob.pythonjob")
     retrieved = create_retrieved_folder(result, error=error, output_filename=output_filename)
-    for key, value in function_data.items():
-        node.base.links.add_incoming(value, link_type=LinkType.INPUT_CALC, link_label=f"function_data__{key}")
-        value.store()
+    for key, value in spec_data.items():
+        node.base.attributes.set(key, value)
     retrieved.base.links.add_incoming(node, link_type=LinkType.CREATE, link_label="retrieved")
     node.store()
     retrieved.store()
     return node
 
 
-def create_parser(result, function_data, error: dict | None = None, output_filename: str = "results.pickle"):
+def create_parser(result, spec_data, error: dict | None = None, output_filename: str = "results.pickle"):
     from aiida_pythonjob.parsers import PythonJobParser
 
-    node = create_process_node(result, function_data, error=error, output_filename=output_filename)
+    node = create_process_node(result, spec_data, error=error, output_filename=output_filename)
     parser = PythonJobParser(node=node)
     return parser
 
 
 def test_tuple_result(fixture_localhost):
     result = (1, 2, 3)
-    function_data = {"outputs_spec": orm.Dict(outputs_spec_with_multiple_sub_specs.to_dict())}
-    parser = create_parser(result, function_data)
+    spec_data = {"outputs_spec": outputs_spec_with_multiple_sub_specs.to_dict()}
+    parser = create_parser(result, spec_data)
     exit_code = parser.parse()
     assert exit_code is None
     assert len(parser.outputs) == 3
@@ -62,16 +61,16 @@ def test_tuple_result(fixture_localhost):
 
 def test_tuple_result_mismatch(fixture_localhost):
     result = (1, 2)
-    function_data = {"outputs_spec": orm.Dict(outputs_spec_with_multiple_sub_specs.to_dict())}
-    parser = create_parser(result, function_data)
+    spec_data = {"outputs_spec": outputs_spec_with_multiple_sub_specs.to_dict()}
+    parser = create_parser(result, spec_data)
     exit_code = parser.parse()
     assert exit_code == parser.exit_codes.ERROR_RESULT_OUTPUT_MISMATCH
 
 
 def test_dict_result(fixture_localhost):
     result = {"a": 1, "b": 2, "c": 3}
-    function_data = {"outputs_spec": orm.Dict(namespace(a=Any, b=Any).to_dict())}
-    parser = create_parser(result, function_data)
+    spec_data = {"outputs_spec": namespace(a=Any, b=Any).to_dict()}
+    parser = create_parser(result, spec_data)
     exit_code = parser.parse()
     assert exit_code is None
     assert len(parser.outputs) == 2
@@ -81,16 +80,16 @@ def test_dict_result(fixture_localhost):
 
 def test_dict_result_missing(fixture_localhost):
     result = {"a": 1, "b": 2}
-    function_data = {"outputs_spec": orm.Dict(outputs_spec_with_multiple_sub_specs.to_dict())}
-    parser = create_parser(result, function_data)
+    spec_data = {"outputs_spec": outputs_spec_with_multiple_sub_specs.to_dict()}
+    parser = create_parser(result, spec_data)
     exit_code = parser.parse()
     assert exit_code == parser.exit_codes.ERROR_MISSING_OUTPUT
 
 
 def test_dict_result_as_one_output(fixture_localhost):
     result = {"a": 1, "b": 2, "c": 3}
-    function_data = {"outputs_spec": orm.Dict(namespace(result=Any).to_dict())}
-    parser = create_parser(result, function_data)
+    spec_data = {"outputs_spec": namespace(result=Any).to_dict()}
+    parser = create_parser(result, spec_data)
     exit_code = parser.parse()
     assert exit_code is None
     assert len(parser.outputs) == 1
@@ -99,8 +98,8 @@ def test_dict_result_as_one_output(fixture_localhost):
 
 def test_dict_result_only_show_one_output(fixture_localhost):
     result = {"a": 1, "b": 2}
-    function_data = {"outputs_spec": orm.Dict(namespace(a=Any).to_dict())}
-    parser = create_parser(result, function_data)
+    spec_data = {"outputs_spec": namespace(a=Any).to_dict()}
+    parser = create_parser(result, spec_data)
     parser.parse()
     assert len(parser.outputs) == 1
     assert parser.outputs["a"] == 1
@@ -110,15 +109,15 @@ def test_dict_result_only_show_one_output(fixture_localhost):
 
 def test_exit_code(fixture_localhost):
     result = {"a": 1, "exit_code": {"status": 0, "message": ""}}
-    function_data = {"outputs_spec": orm.Dict(namespace(a=Any).to_dict())}
-    parser = create_parser(result, function_data)
+    spec_data = {"outputs_spec": namespace(a=Any).to_dict()}
+    parser = create_parser(result, spec_data)
     exit_code = parser.parse()
     assert exit_code is None
     assert parser.outputs["a"] == 1
     #
     result = {"exit_code": {"status": 1, "message": "error"}}
-    function_data = {"outputs_spec": orm.Dict(outputs_spec_with_multiple_sub_specs.to_dict())}
-    parser = create_parser(result, function_data)
+    spec_data = {"outputs_spec": outputs_spec_with_multiple_sub_specs.to_dict()}
+    parser = create_parser(result, spec_data)
     exit_code = parser.parse()
     assert exit_code is not None
     assert exit_code.status == 1
@@ -127,8 +126,8 @@ def test_exit_code(fixture_localhost):
 
 def test_no_output_file(fixture_localhost):
     result = {"a": 1, "b": 2, "c": 3}
-    function_data = {"outputs_spec": orm.Dict(namespace(result=Any).to_dict())}
-    parser = create_parser(result, function_data, output_filename="not_results.pickle")
+    spec_data = {"outputs_spec": namespace(result=Any).to_dict()}
+    parser = create_parser(result, spec_data, output_filename="not_results.pickle")
     exit_code = parser.parse()
     assert exit_code == parser.exit_codes.ERROR_READING_OUTPUT_FILE
 
@@ -136,18 +135,18 @@ def test_no_output_file(fixture_localhost):
 @pytest.mark.parametrize(
     "error_type, status",
     [
-        ("IMPORT_CLOUDPICKLE_FAILED", 322),
-        ("UNPICKLE_INPUTS_FAILED", 323),
-        ("UNPICKLE_FUNCTION_FAILED", 324),
-        ("FUNCTION_EXECUTION_FAILED", 325),
-        ("PICKLE_RESULTS_FAILED", 326),
+        ("IMPORT_CLOUDPICKLE_FAILED", 323),
+        ("UNPICKLE_INPUTS_FAILED", 324),
+        ("UNPICKLE_FUNCTION_FAILED", 325),
+        ("FUNCTION_EXECUTION_FAILED", 326),
+        ("PICKLE_RESULTS_FAILED", 327),
     ],
 )
 def test_run_script_error(error_type, status):
     error = {"error_type": error_type, "exception_message": "error", "traceback": "traceback"}
     result = {"a": 1, "exit_code": {"status": 0, "message": ""}}
-    function_data = {"outputs_spec": orm.Dict(namespace(a=Any).to_dict())}
-    parser = create_parser(result, function_data, error=error)
+    spec_data = {"outputs_spec": namespace(a=Any).to_dict()}
+    parser = create_parser(result, spec_data, error=error)
     exit_code = parser.parse()
     assert exit_code is not None
     assert exit_code.status == status

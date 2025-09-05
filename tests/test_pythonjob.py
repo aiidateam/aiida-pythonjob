@@ -5,8 +5,9 @@ import tempfile
 import pytest
 from aiida import orm
 from aiida.engine import run_get_node
-from aiida_pythonjob import PythonJob, prepare_pythonjob_inputs
 from node_graph import socket_spec as spec
+
+from aiida_pythonjob import PythonJob, prepare_pythonjob_inputs
 
 
 def test_validate_inputs(fixture_localhost):
@@ -21,6 +22,17 @@ def test_validate_inputs(fixture_localhost):
         prepare_pythonjob_inputs(
             function=add,
             function_data={"module_path": "math", "name": "sqrt", "is_pickle": False},
+        )
+
+
+def test_validate_function_inputs(fixture_localhost):
+    def add(x, y):
+        return x + y
+
+    with pytest.raises(ValueError, match="Invalid function inputs: missing a required argument"):
+        prepare_pythonjob_inputs(
+            function=add,
+            function_inputs={"x": 1},
         )
 
 

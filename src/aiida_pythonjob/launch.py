@@ -11,6 +11,18 @@ from node_graph.socket_spec import infer_specs_from_callable
 from .utils import build_function_data, get_or_create_code, serialize_ports
 
 
+def validate_inputs(func, inputs: dict):
+    sig = inspect.signature(func)
+
+    try:
+        # Bind the provided inputs to the function's signature
+        sig.bind(**inputs)
+    except TypeError as e:
+        return False, str(e)
+
+    return True, "Inputs are valid."
+
+
 def prepare_pythonjob_inputs(
     function: Optional[Callable[..., Any]] = None,
     function_inputs: Optional[Dict[str, Any]] = None,
@@ -61,11 +73,15 @@ def prepare_pythonjob_inputs(
         command_info = command_info or {}
         code = get_or_create_code(computer=computer, **command_info)
     in_spec, out_spec = infer_specs_from_callable(function, inputs=inputs_spec, outputs=outputs_spec)
-    function_data["inputs_spec"] = in_spec.to_dict()
-    function_data["outputs_spec"] = out_spec.to_dict()
+    metadata = metadata or {}
+    metadata["outputs_spec"] = out_spec.to_dict()
     # serialize kwargs against the (nested) input schema
     function_inputs = function_inputs or {}
     function_inputs = serialize_ports(python_data=function_inputs, port_schema=in_spec, serializers=serializers)
+    if function is not None:
+        valid, msg = validate_inputs(function, function_inputs)
+        if not valid:
+            raise ValueError(f"Invalid function inputs: {msg}")
     # replace "." with "__dot__" in the keys of a dictionary
     if deserializers:
         deserializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in deserializers.items()})
@@ -76,7 +92,7 @@ def prepare_pythonjob_inputs(
         "code": code,
         "function_inputs": function_inputs,
         "upload_files": new_upload_files,
-        "metadata": metadata or {},
+        "metadata": metadata,
         "deserializers": deserializers,
         "serializers": serializers,
         **kwargs,
@@ -135,8 +151,8 @@ def prepare_pyfunction_inputs(
             raise ValueError("Invalid function type")
     # spec
     in_spec, out_spec = infer_specs_from_callable(function, inputs=inputs_spec, outputs=outputs_spec)
-    function_data["inputs_spec"] = in_spec.to_dict()
-    function_data["outputs_spec"] = out_spec.to_dict()
+    metadata = metadata or {}
+    metadata["outputs_spec"] = out_spec.to_dict()
     # serialize the kwargs into AiiDA Data
     function_inputs = function_inputs or {}
     function_inputs = serialize_ports(python_data=function_inputs, port_schema=in_spec, serializers=serializers)
@@ -148,7 +164,7 @@ def prepare_pyfunction_inputs(
     inputs = {
         "function_data": function_data,
         "function_inputs": function_inputs,
-        "metadata": metadata or {},
+        "metadata": metadata,
         "deserializers": deserializers,
         "serializers": serializers,
         **kwargs,

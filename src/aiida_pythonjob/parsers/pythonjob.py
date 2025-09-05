@@ -24,7 +24,7 @@ class PythonJobParser(Parser):
         import pickle
 
         # Read outputs SocketSpec
-        spec_dict = self.node.inputs.function_data.outputs_spec.get_dict()
+        spec_dict = self.node.base.attributes.get("outputs_spec", {})
         self.outputs_spec = SocketSpec.from_dict(spec_dict)
 
         # load custom serializers
