@@ -29,12 +29,7 @@ class PythonJobParser(Parser):
         self.outputs_spec = SocketSpec.from_dict(spec_dict)
 
         # load custom serializers
-        if "serializers" in self.node.inputs and self.node.inputs.serializers:
-            serializers = self.node.inputs.serializers.get_dict()
-            # replace "__dot__" with "." in the keys
-            self.serializers = {k.replace("__dot__", "."): v for k, v in serializers.items()}
-        else:
-            self.serializers = None
+        self.serializers = self.node.base.attributes.get("serializers", {})
 
         # 1) Read _error.json
         try:

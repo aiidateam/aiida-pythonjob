@@ -12,6 +12,9 @@ from aiida.cmdline.utils.common import get_workchain_report
 from aiida.common.links import LinkType
 from node_graph.socket_spec import namespace
 
+from aiida_pythonjob.data.deserializer import all_deserializers
+from aiida_pythonjob.data.serializer import all_serializers
+
 outputs_spec_with_multiple_sub_specs = namespace(a=Any, b=Any, c=Any)
 
 
@@ -36,6 +39,8 @@ def create_process_node(
     retrieved = create_retrieved_folder(result, error=error, output_filename=output_filename)
     for key, value in spec_data.items():
         node.base.attributes.set(key, value)
+    node.base.attributes.set("serializers", all_serializers)
+    node.base.attributes.set("deserializers", all_deserializers)
     retrieved.base.links.add_incoming(node, link_type=LinkType.CREATE, link_label="retrieved")
     node.store()
     retrieved.store()
@@ -114,7 +119,6 @@ def test_exit_code(fixture_localhost):
     exit_code = parser.parse()
     assert exit_code is None
     assert parser.outputs["a"] == 1
-    #
     result = {"exit_code": {"status": 1, "message": "error"}}
     spec_data = {"outputs_spec": outputs_spec_with_multiple_sub_specs.to_dict()}
     parser = create_parser(result, spec_data)

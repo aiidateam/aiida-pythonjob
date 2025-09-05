@@ -2,15 +2,16 @@ from aiida import orm
 from aiida.engine import run_get_node
 from node_graph import socket_spec as spec
 
-from aiida_pythonjob import pyfunction
+from aiida_pythonjob import PyFunction, prepare_pyfunction_inputs, pyfunction
+
+
+@pyfunction()
+def add(x, y):
+    return x + y
 
 
 def test_function_default_outputs(fixture_localhost):
     """Test decorator."""
-
-    @pyfunction()
-    def add(x, y):
-        return x + y
 
     result, node = run_get_node(add, x=1, y=2)
 
@@ -18,12 +19,22 @@ def test_function_default_outputs(fixture_localhost):
     assert node.process_label == "add"
 
 
+def test_prepare_pyfunction_inputs():
+    """Test prepare_pyfunction_inputs utility function."""
+    inputs = prepare_pyfunction_inputs(
+        add,
+        function_inputs={"x": 1, "y": 2},
+    )
+    result, _ = run_get_node(PyFunction, **inputs)
+    assert result["result"].value == 3
+
+
 def test_output_tuple():
     @pyfunction(outputs=spec.namespace(sum=int, diff=int))
     def add(x, y):
         return x + y, x - y
 
-    result, node = run_get_node(add, x=1, y=2)
+    result, _ = run_get_node(add, x=1, y=2)
 
     assert result["sum"].value == 3
     assert result["diff"].value == -1
@@ -249,3 +260,14 @@ def test_dynamic_rows():
     # outputs should be serialized as dynamic rows
     assert node.outputs.sum.value == 1
     assert node.outputs.data_0.sum.value == 0
+
+
+def test_only_data_with_value():
+    from aiida import orm
+
+    @pyfunction()
+    def add(x, y):
+        return x + y
+
+    _, node = run_get_node(add, x=1, y=orm.XyData())
+    assert node.exit_status == 320

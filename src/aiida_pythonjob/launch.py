@@ -8,6 +8,9 @@ from aiida import orm
 from node_graph.node_spec import BaseHandle
 from node_graph.socket_spec import infer_specs_from_callable
 
+from aiida_pythonjob.data.deserializer import all_deserializers
+from aiida_pythonjob.data.serializer import all_serializers
+
 from .utils import build_function_data, get_or_create_code, serialize_ports
 
 
@@ -69,7 +72,6 @@ def prepare_pythonjob_inputs(
             new_upload_files[new_key] = source
         else:
             raise ValueError(f"Invalid upload file type: {type(source)}, {source}")
-    #
     if code is None:
         command_info = command_info or {}
         code = get_or_create_code(computer=computer, **command_info)
@@ -77,6 +79,8 @@ def prepare_pythonjob_inputs(
     metadata = metadata or {}
     metadata["outputs_spec"] = out_spec.to_dict()
     # serialize kwargs against the (nested) input schema
+    serializers = {**all_serializers, **(serializers or {})}
+    deserializers = {**all_deserializers, **(deserializers or {})}
     function_inputs = function_inputs or {}
     function_inputs = serialize_ports(
         python_data=function_inputs, port_schema=in_spec, serializers=serializers, use_pickle=use_pickle
@@ -85,19 +89,14 @@ def prepare_pythonjob_inputs(
         valid, msg = validate_inputs(function, function_inputs)
         if not valid:
             raise ValueError(f"Invalid function inputs: {msg}")
-    # replace "." with "__dot__" in the keys of a dictionary
-    if deserializers:
-        deserializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in deserializers.items()})
-    if serializers:
-        serializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in serializers.items()})
+    metadata["serializers"] = serializers
+    metadata["deserializers"] = deserializers
     inputs = {
         "function_data": function_data,
         "code": code,
         "function_inputs": function_inputs,
         "upload_files": new_upload_files,
         "metadata": metadata,
-        "deserializers": deserializers,
-        "serializers": serializers,
         **kwargs,
     }
     if process_label:
@@ -145,6 +144,8 @@ def prepare_pyfunction_inputs(
         raise ValueError("Only one of function or function_data should be provided")
     if isinstance(function, BaseHandle):
         function = function._func
+    elif hasattr(function, "is_process_function") and function.is_process_function:
+        function = function.func
     # if function is a function, inspect it and get the source code
     if function is not None:
         if inspect.isfunction(function):
@@ -158,21 +159,18 @@ def prepare_pyfunction_inputs(
     metadata = metadata or {}
     metadata["outputs_spec"] = out_spec.to_dict()
     # serialize the kwargs into AiiDA Data
+    serializers = {**all_serializers, **(serializers or {})}
+    deserializers = {**all_deserializers, **(deserializers or {})}
     function_inputs = function_inputs or {}
     function_inputs = serialize_ports(
         python_data=function_inputs, port_schema=in_spec, serializers=serializers, use_pickle=use_pickle
     )
-    # replace "." with "__dot__" in the keys of a dictionary
-    if deserializers:
-        deserializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in deserializers.items()})
-    if serializers:
-        serializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in serializers.items()})
+    metadata["serializers"] = serializers
+    metadata["deserializers"] = deserializers
     inputs = {
         "function_data": function_data,
         "function_inputs": function_inputs,
         "metadata": metadata,
-        "deserializers": deserializers,
-        "serializers": serializers,
         **kwargs,
     }
     if process_label:

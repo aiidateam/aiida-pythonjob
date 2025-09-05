@@ -1,6 +1,8 @@
 import aiida
 import pytest
 
+from aiida_pythonjob.data.serializer import all_serializers
+
 
 def test_typing():
     """Test function with typing."""
@@ -37,10 +39,10 @@ def test_python_job():
         ValueError,
         match="Cannot serialize type=set. No suitable method found",
     ):
-        new_inputs = serialize_to_aiida_nodes(inputs)
+        new_inputs = serialize_to_aiida_nodes(inputs, serializers=all_serializers)
     # Allow pickling
     config["use_pickle"] = True
-    new_inputs = serialize_to_aiida_nodes(inputs)
+    new_inputs = serialize_to_aiida_nodes(inputs, serializers=all_serializers)
     assert isinstance(new_inputs["a"], aiida.orm.Int)
     assert isinstance(new_inputs["b"], aiida.orm.Float)
     assert isinstance(new_inputs["c"], PickledData)
@@ -55,19 +57,6 @@ def test_atoms_data():
 
     atoms_data = AtomsData(atoms)
     assert atoms_data.value == atoms
-
-
-def test_only_data_with_value():
-    from aiida_pythonjob.data import general_serializer
-
-    # do not raise error because the built-in serializer can handle it
-    general_serializer(aiida.orm.List([1]))
-    # Test case: aiida.orm.ArrayData should raise a ValueError
-    with pytest.raises(
-        ValueError,
-        match="AiiDA data: aiida.orm.nodes.data.array.xy.XyData, does not have a `value` attribute or deserializer.",
-    ):
-        general_serializer(aiida.orm.XyData())
 
 
 def test_deserializer():

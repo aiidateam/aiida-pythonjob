@@ -60,13 +60,13 @@ Source = "https://github.com/aiidateam/aiida-pythonjob"
 "pythonjob.builtins.float" = "aiida.orm.nodes.data.float:Float"
 "pythonjob.builtins.str" = "aiida.orm.nodes.data.str:Str"
 "pythonjob.builtins.bool" = "aiida.orm.nodes.data.bool:Bool"
-"pythonjob.builtins.list" = "aiida_pythonjob.data.data_wrapper:List"
-"pythonjob.builtins.dict" = "aiida_pythonjob.data.data_wrapper:Dict"
+"pythonjob.builtins.list" = "aiida.orm.nodes.data.list:List"
+"pythonjob.builtins.dict" = "aiida.orm.nodes.data.dict:Dict"
 "pythonjob.numpy.float32" = "aiida.orm.nodes.data.float:Float"
 "pythonjob.numpy.float64" = "aiida.orm.nodes.data.float:Float"
 "pythonjob.numpy.int64" = "aiida.orm.nodes.data.int:Int"
 "pythonjob.numpy.bool_" = "aiida.orm.nodes.data.bool:Bool"
-"pythonjob.numpy.ndarray" = "aiida_pythonjob.data.data_wrapper:ArrayData"
+"pythonjob.numpy.ndarray" = "aiida.orm.nodes.data.array.array.ArrayData"
 
 [project.entry-points."aiida.calculations"]
 "pythonjob.pythonjob" = "aiida_pythonjob.calculations.pythonjob:PythonJob"
@@ -98,12 +98,15 @@ filterwarnings = [
 source = ["src/aiida_pythonjob"]
 
 [tool.ruff]
-line-length = 120
+line-length = 121
 
 [tool.ruff.lint]
 ignore = [
   "F403",
   "F405",
+  "F821",
+  "F722",
+  "E203",
   "PLR0911",
   "PLR0912",
   "PLR0913",

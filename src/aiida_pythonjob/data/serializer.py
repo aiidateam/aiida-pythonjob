@@ -9,7 +9,6 @@ from aiida import common, orm
 
 from aiida_pythonjob.data.jsonable_data import JsonableData
 
-from .deserializer import all_deserializers
 from .utils import import_from_path
 
 
@@ -70,7 +69,7 @@ def get_serializers() -> dict:
 all_serializers = get_serializers()
 
 
-def serialize_to_aiida_nodes(inputs: dict, serializers: dict | None = None, deserializers: dict | None = None) -> dict:
+def serialize_to_aiida_nodes(inputs: dict, serializers: dict | None = None) -> dict:
     """Serialize the inputs to a dictionary of AiiDA data nodes.
 
     Args:
@@ -82,7 +81,7 @@ def serialize_to_aiida_nodes(inputs: dict, serializers: dict | None = None, dese
     new_inputs = {}
     # save all kwargs to inputs port
     for key, data in inputs.items():
-        new_inputs[key] = general_serializer(data, serializers=serializers, deserializers=deserializers)
+        new_inputs[key] = general_serializer(data, serializers=serializers)
     return new_inputs
 
 
@@ -96,8 +95,6 @@ def clean_dict_key(data):
 def general_serializer(
     data: Any,
     serializers: dict | None = None,
-    deserializers: dict | None = None,
-    check_value: bool = True,
     store: bool = True,
     use_pickle: bool | None = None,
 ) -> orm.Node:
@@ -112,21 +109,8 @@ def general_serializer(
     if use_pickle is None:
         use_pickle = config.get("use_pickle", False)
 
-    updated_deserializers = all_deserializers.copy()
-    if deserializers is not None:
-        updated_deserializers.update(deserializers)
-
-    updated_serializers = all_serializers.copy()
-    if serializers is not None:
-        updated_serializers.update(serializers)
-
     # 1) If it is already an AiiDA node, just return it
     if isinstance(data, orm.Data):
-        if check_value and not hasattr(data, "value"):
-            data_type = type(data)
-            ep_key = f"{data_type.__module__}.{data_type.__name__}"
-            if ep_key not in updated_deserializers:
-                raise ValueError(f"AiiDA data: {ep_key}, does not have a `value` attribute or deserializer.")
         return data
     elif isinstance(data, common.extendeddicts.AttributeDict):
         # if the data is an AttributeDict, use it directly
@@ -135,9 +119,10 @@ def general_serializer(
     # 3) check entry point
     data_type = type(data)
     ep_key = f"{data_type.__module__}.{data_type.__name__}"
-    if ep_key in updated_serializers:
+    serializers = serializers or {}
+    if ep_key in serializers:
         try:
-            serializer = import_from_path(updated_serializers[ep_key])
+            serializer = import_from_path(serializers[ep_key])
             new_node = serializer(data)
             if store:
                 new_node.store()
