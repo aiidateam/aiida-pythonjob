@@ -21,11 +21,6 @@ apply to `PythonJob` as well.
 # essential for ensuring that returned data is properly serialized and can be
 # queried or reused in subsequent workflows.
 #
-# Configuring Outputs
-# -------------------
-# You can configure outputs using the ``outputs_spec`` argument in
-# ``prepare_pyfunction_inputs`` or the ``outputs`` argument in the ``@pyfunction``
-# decorator.
 #
 # Static namespaces
 # -----------------
@@ -33,6 +28,7 @@ apply to `PythonJob` as well.
 # Each key-value pair in the returned dictionary will be stored as a separate output node.
 #
 #
+
 from typing import Annotated, Any
 
 from aiida import load_profile
@@ -95,6 +91,32 @@ print("product:", result["product"])
 #        from aiida.engine import run_get_node
 #        result, node = run_get_node(add_multiply, x=1, y=2)
 #
+# One can annotate the inputs using Python's type hints as well:
+#
+
+
+def add_multiply(
+    data: Annotated[dict, spec.namespace(x=int, y=int)],
+) -> Annotated[dict, spec.namespace(sum=Any, product=Any)]:
+    x = data["x"]
+    y = data["y"]
+    return {"sum": x + y, "product": x * y}
+
+
+# Usage with PythonJob
+inputs = prepare_pyfunction_inputs(
+    add_multiply,
+    function_inputs={"data": {"x": 1, "y": 2}},
+    outputs_spec=spec.namespace(sum=Any, product=Any),
+)
+
+result, node = run_get_node(PyFunction, inputs=inputs)
+print(node.inputs.function_inputs.data.x)
+print(node.inputs.function_inputs.data.y)
+print(node.outputs.sum)
+print(node.outputs.product)
+
+# %%
 # Dynamic namespaces
 # ~~~~~~~~~~~~~~~~~~~~~~
 # When the number and names of outputs are not known until runtime, you can use a dynamic namespace.
