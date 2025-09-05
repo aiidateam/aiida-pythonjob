@@ -1,6 +1,6 @@
 """AiiDA plugin that run Python function on remote computers."""
 
-__version__ = "0.3.4"
+__version__ = "0.3.5"
 
 from node_graph import socket_spec as spec
 
