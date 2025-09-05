@@ -47,6 +47,12 @@ class PythonJob(CalcJob):
         super().define(spec)
         spec.input_namespace("function_data", dynamic=True, required=True)
         spec.input("metadata.outputs_spec", valid_type=dict, required=False, help="Specification for the outputs.")
+        spec.input(
+            "metadata.use_pickle",
+            valid_type=bool,
+            required=False,
+            help="Allow pickling of function inputs and outputs.",
+        )
         spec.input("process_label", valid_type=Str, serializer=to_aiida_type, required=False)
         spec.input_namespace("function_inputs", valid_type=Data, required=False)
         spec.input(
@@ -182,6 +188,7 @@ class PythonJob(CalcJob):
 
         outputs_spec = metadata.pop("outputs_spec", {})
         self.node.base.attributes.set("outputs_spec", outputs_spec)
+        self.node.base.attributes.set("use_pickle", metadata.pop("use_pickle", False))
         super()._setup_metadata(metadata)
 
     def get_function_name(self) -> str:

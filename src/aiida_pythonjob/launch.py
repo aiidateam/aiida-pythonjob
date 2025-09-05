@@ -38,6 +38,7 @@ def prepare_pythonjob_inputs(
     deserializers: dict | None = None,
     serializers: dict | None = None,
     register_pickle_by_value: bool = False,
+    use_pickle: bool | None = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """Prepare the inputs for PythonJob"""
@@ -77,7 +78,9 @@ def prepare_pythonjob_inputs(
     metadata["outputs_spec"] = out_spec.to_dict()
     # serialize kwargs against the (nested) input schema
     function_inputs = function_inputs or {}
-    function_inputs = serialize_ports(python_data=function_inputs, port_schema=in_spec, serializers=serializers)
+    function_inputs = serialize_ports(
+        python_data=function_inputs, port_schema=in_spec, serializers=serializers, use_pickle=use_pickle
+    )
     if function is not None:
         valid, msg = validate_inputs(function, function_inputs)
         if not valid:
@@ -130,6 +133,7 @@ def prepare_pyfunction_inputs(
     deserializers: dict | None = None,
     serializers: dict | None = None,
     register_pickle_by_value: bool = False,
+    use_pickle: bool | None = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """Prepare the inputs for PyFunction."""
@@ -155,7 +159,9 @@ def prepare_pyfunction_inputs(
     metadata["outputs_spec"] = out_spec.to_dict()
     # serialize the kwargs into AiiDA Data
     function_inputs = function_inputs or {}
-    function_inputs = serialize_ports(python_data=function_inputs, port_schema=in_spec, serializers=serializers)
+    function_inputs = serialize_ports(
+        python_data=function_inputs, port_schema=in_spec, serializers=serializers, use_pickle=use_pickle
+    )
     # replace "." with "__dot__" in the keys of a dictionary
     if deserializers:
         deserializers = orm.Dict({k.replace(".", "__dot__"): v for k, v in deserializers.items()})

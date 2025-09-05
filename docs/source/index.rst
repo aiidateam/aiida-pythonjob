@@ -47,6 +47,7 @@ These tools are designed to simplify the experience for users not familiar with 
    :hidden:
 
    installation
+   autogen/common_concepts
    autogen/pythonjob
    autogen/pyfunction
    tutorial/index
