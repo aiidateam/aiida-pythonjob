@@ -58,20 +58,3 @@ def test_serialize_json():
 
     serialized_data = general_serializer(data, serializers=all_serializers)
     assert isinstance(serialized_data, JsonableData)
-
-
-def test_serialize_pickle():
-    from aiida_pythonjob.config import config
-    from aiida_pythonjob.data.pickled_data import PickledData
-    from aiida_pythonjob.data.serializer import general_serializer
-
-    data = NonJsonableData("a", 1)
-    config["use_pickle"] = False
-    with pytest.raises(
-        ValueError,
-        match="Cannot serialize type=NonJsonableData. No suitable method found",
-    ):
-        general_serializer(data, serializers=all_serializers)
-    config["use_pickle"] = True
-    serialized_data = general_serializer(data, serializers=all_serializers)
-    assert isinstance(serialized_data, PickledData)

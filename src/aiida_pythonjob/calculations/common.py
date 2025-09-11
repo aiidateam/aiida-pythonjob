@@ -10,7 +10,6 @@ from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
 
 # Attribute keys stored on ProcessNode.base.attributes
 ATTR_OUTPUTS_SPEC = "outputs_spec"
-ATTR_USE_PICKLE = "use_pickle"
 ATTR_SERIALIZERS = "serializers"
 ATTR_DESERIALIZERS = "deserializers"
 
@@ -27,12 +26,6 @@ def add_common_function_io(spec) -> None:
         valid_type=dict,
         required=False,
         help="Specification for the outputs.",
-    )
-    spec.input(
-        "metadata.use_pickle",
-        valid_type=bool,
-        required=False,
-        help="Allow pickling of function inputs and outputs.",
     )
     spec.input("process_label", valid_type=Str, serializer=to_aiida_type, required=False)
 
@@ -115,7 +108,6 @@ class FunctionProcessMixin:
     def _setup_metadata(self, metadata: dict) -> None:  # type: ignore[override]
         """Store common metadata on the ProcessNode and forward the rest."""
         self.node.base.attributes.set(ATTR_OUTPUTS_SPEC, metadata.pop("outputs_spec", {}))
-        self.node.base.attributes.set(ATTR_USE_PICKLE, metadata.pop("use_pickle", False))
         self.node.base.attributes.set(ATTR_SERIALIZERS, metadata.pop("serializers", {}))
         self.node.base.attributes.set(ATTR_DESERIALIZERS, metadata.pop("deserializers", {}))
         super()._setup_metadata(metadata)

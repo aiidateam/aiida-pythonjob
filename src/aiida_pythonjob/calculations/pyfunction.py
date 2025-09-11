@@ -17,7 +17,6 @@ from aiida_pythonjob.calculations.common import (
     ATTR_DESERIALIZERS,
     ATTR_OUTPUTS_SPEC,
     ATTR_SERIALIZERS,
-    ATTR_USE_PICKLE,
     FunctionProcessMixin,
     add_common_function_io,
 )
@@ -115,7 +114,6 @@ class PyFunction(FunctionProcessMixin, Process):
 
         # Parse & attach outputs
         outputs_spec = SocketSpec.from_dict(self.node.base.attributes.get(ATTR_OUTPUTS_SPEC) or {})
-        use_pickle = self.node.base.attributes.get(ATTR_USE_PICKLE, False)
         serializers = self.node.base.attributes.get(ATTR_SERIALIZERS, {})
         outputs, exit_code = parse_outputs(
             results,
@@ -123,7 +121,6 @@ class PyFunction(FunctionProcessMixin, Process):
             exit_codes=self.exit_codes,
             logger=self.logger,
             serializers=serializers,
-            use_pickle=use_pickle,
         )
         if exit_code:
             return exit_code

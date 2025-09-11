@@ -10,7 +10,6 @@ from .launch import prepare_pyfunction_inputs, prepare_pythonjob_inputs
 from .parsers import PythonJobParser
 
 __all__ = (
-    "PickledData",
     "PyFunction",
     "PythonJob",
     "PythonJobParser",

@@ -203,8 +203,7 @@ print("nested product:", result["nested"]["product"])
 #    object's type (e.g., ``ase.atoms.Atoms``).
 # 2. If no specific serializer is found, it attempts to store the data using
 #    ``JsonableData``.
-# 3. If the data is not JSON-serializable, it will be pickled using
-#    ``PickledData`` **only if** ``use_pickle=True`` is set.
+# 3. If the data is not JSON-serializable, it will raise an error.
 #
 # Registering a custom serializer
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -226,8 +225,7 @@ print("nested product:", result["nested"]["product"])
 # that returns a simple Python type. For example, an ``Int`` node has a ``.value``
 # attribute that returns a standard Python integer. Similarly, from aiida-core v2.7.0
 # onwards, the ``Dict`` and ``List`` nodes also have ``.value`` attributes that return
-# standard Python dictionaries and lists. The ``PickledData`` and ``JsonableData`` nodes also have a ``.value``
-# attribute that returns the unpickled Python object.
+# standard Python dictionaries and lists.
 #
 # However, if the input AiiDA node does not have a ``.value`` attribute, you need to
 # register a deserializer for it. This ensures the node can be converted into a
@@ -264,19 +262,5 @@ print("nested product:", result["nested"]["product"])
 #        "deserializers": {
 #            "aiida.orm.nodes.data.structure.StructureData": "aiida_pythonjob.data.deserializer.structure_data_to_pymatgen"  # noqa: E501
 #        },
-#        "use_pickle": false
 #    }
-#
-# Using pickle for non-JSON Data
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# For one-off cases involving non-JSON-serializable data, you can enable
-# pickle serialization by passing ``use_pickle=True``.
-#
-# .. code-block:: python
-#
-#     inputs = prepare_pyfunction_inputs(
-#         my_function,
-#         function_inputs={"data": MyCustomObject(1)},
-#         use_pickle=True
-#     )
 #

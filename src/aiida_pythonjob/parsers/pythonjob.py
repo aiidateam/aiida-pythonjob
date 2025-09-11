@@ -25,7 +25,6 @@ class PythonJobParser(Parser):
 
         # Read outputs SocketSpec
         spec_dict = self.node.base.attributes.get("outputs_spec", {})
-        use_pickle = self.node.base.attributes.get("use_pickle", False)
         self.outputs_spec = SocketSpec.from_dict(spec_dict)
 
         # load custom serializers
@@ -65,7 +64,6 @@ class PythonJobParser(Parser):
                     exit_codes=self.exit_codes,
                     logger=self.logger,
                     serializers=self.serializers,
-                    use_pickle=use_pickle,
                 )
                 if exit_code:
                     return exit_code
