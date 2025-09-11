@@ -96,20 +96,12 @@ def general_serializer(
     data: Any,
     serializers: dict | None = None,
     store: bool = True,
-    use_pickle: bool | None = None,
 ) -> orm.Node:
     """
     Attempt to serialize the data to an AiiDA data node based on the preference from `config`:
       1) AiiDA data only, 2) JSON-serializable, 3) fallback to PickledData (if allowed).
     """
-    from aiida_pythonjob.config import config
-
     serializers = serializers or all_serializers
-
-    # Merge user-provided config with defaults
-    allow_json = config.get("allow_json", True)
-    if use_pickle is None:
-        use_pickle = config.get("use_pickle", False)
 
     # 1) If it is already an AiiDA node, just return it
     if isinstance(data, orm.Data):
@@ -132,30 +124,33 @@ def general_serializer(
             error_traceback = traceback.format_exc()
             raise ValueError(f"Error in serializing {ep_key}: {error_traceback}")
 
-    #    check if we can JSON-serialize the data
-    if allow_json:
-        try:
-            node = JsonableData(data)
-            if store:
-                node.store()
-            return node
-        except (TypeError, ValueError):
-            # print(f"Error in JSON-serializing {type(data).__name__}")
-            pass
-
-    # fallback to pickling
-    if use_pickle:
-        from .pickled_data import PickledData
-
-        try:
-            new_node = PickledData(data)
-            if store:
-                new_node.store()
-            return new_node
-        except Exception as e:
-            raise ValueError(f"Error in pickling {type(data).__name__}: {e}")
-
-    raise ValueError(
-        f"Cannot serialize type={type(data).__name__}. No suitable method found "
-        f"(json_allowed={allow_json}, pickle_allowed={use_pickle})."
-    )
+    try:
+        node = JsonableData(data)
+        if store:
+            node.store()
+        return node
+    except (TypeError, ValueError):
+        suggestions = [
+            "How to fix:",
+            "1) Register a type-specific AiiDA Data class as an `aiida.data` entry point "
+            "(recommended for domain objects).",
+            "   Example in `pyproject.toml`:",
+            '   [project.entry-points."aiida.data"]',
+            f'   myplugin.{ep_key} = "myplugin.data.mytype:MyTypeData"',
+            "   where `MyTypeData` is a subclass of `aiida.orm.Data` that knows how to store your object.",
+            "",
+            "2) Or make the class JSON-serializable so `JsonableData` can handle it by implementing:",
+            "   - `to_dict()` / `as_dict()` (any one) returning only JSON-friendly structures, and",
+            "   - `from_dict(cls, dct)` / `fromdict(cls, dct)` to rebuild the object later.",
+            "",
+            "3) Or pass an ad-hoc serializer function via the `serializers` argument:",
+            f"   general_serializer(obj, serializers={{'{ep_key}': 'my_pkg.mod:to_aiida_node'}})",
+            "   where `to_aiida_node(obj)` returns an `aiida.orm.Data` instance.",
+        ]
+        raise ValueError(
+            (
+                "Cannot serialize the provided object.\n\n"
+                f"Type: {ep_key}\n"
+                f"Tried entry-point key: '{ep_key}' — not found in provided serializers.\n" + "\n".join(suggestions)
+            )
+        )

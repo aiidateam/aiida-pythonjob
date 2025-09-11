@@ -14,11 +14,11 @@ def test_validate_inputs(fixture_localhost):
     def add(x, y):
         return x + y
 
-    with pytest.raises(ValueError, match="Either function or function_data must be provided"):
+    with pytest.raises(ValueError, match="Either `function` or `function_data` must be provided."):
         prepare_pythonjob_inputs(
             function_inputs={"x": 1, "y": 2},
         )
-    with pytest.raises(ValueError, match="Only one of function or function_data should be provided"):
+    with pytest.raises(ValueError, match="Only one of `function` or `function_data` should be provided."):
         prepare_pythonjob_inputs(
             function=add,
             function_data={"module_path": "math", "name": "sqrt", "is_pickle": False},

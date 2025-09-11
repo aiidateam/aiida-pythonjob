@@ -30,22 +30,14 @@ def test_typing():
 
 def test_python_job():
     """Test a simple python node."""
-    from aiida_pythonjob.config import config
-    from aiida_pythonjob.data.pickled_data import PickledData
     from aiida_pythonjob.data.serializer import serialize_to_aiida_nodes
 
     inputs = {"a": 1, "b": 2.0, "c": set()}
     with pytest.raises(
         ValueError,
-        match="Cannot serialize type=set. No suitable method found",
+        match="Cannot serialize the provided object.",
     ):
-        new_inputs = serialize_to_aiida_nodes(inputs, serializers=all_serializers)
-    # Allow pickling
-    config["use_pickle"] = True
-    new_inputs = serialize_to_aiida_nodes(inputs, serializers=all_serializers)
-    assert isinstance(new_inputs["a"], aiida.orm.Int)
-    assert isinstance(new_inputs["b"], aiida.orm.Float)
-    assert isinstance(new_inputs["c"], PickledData)
+        serialize_to_aiida_nodes(inputs, serializers=all_serializers)
 
 
 def test_atoms_data():
