@@ -233,6 +233,7 @@ class PythonJob(CalcJob):
             pickled_function=pickled_function,
             source_code=source_code,
             function_name=function_name,
+            with_mpi=self.inputs.metadata.options.get("withmpi", False),
         )
 
         # Write the script to the working folder
@@ -317,7 +318,10 @@ class PythonJob(CalcJob):
         local_copy_list.append((file_data.uuid, file_data.filename, filename))
 
         codeinfo = CodeInfo()
-        codeinfo.stdin_name = self.options.input_filename
+        if self.options.get('withmpi', False):
+            codeinfo.cmdline_params = [self.options.input_filename]
+        else:
+            codeinfo.stdin_name = self.options.input_filename
         codeinfo.stdout_name = self.options.output_filename
         codeinfo.code_uuid = self.inputs.code.uuid
 
