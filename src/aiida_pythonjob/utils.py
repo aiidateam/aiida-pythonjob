@@ -307,7 +307,10 @@ def serialize_ports(
         for key, value in python_data.items():
             if key in fields:
                 child_spec = fields[key]
-                if child_spec.is_namespace():
+                # Metadata is not serialized
+                if child_spec.meta.is_metadata:
+                    out[key] = value
+                elif child_spec.is_namespace():
                     out[key] = serialize_ports(value, child_spec, serializers=serializers)
                 else:
                     out[key] = general_serializer(value, serializers=serializers, store=False)
