@@ -22,7 +22,7 @@ requires-python = ">=3.9"
 dependencies = [
     "aiida-core>=2.3,<3",
     "ase",
-    "node-graph>=0.3.0",
+    "node-graph>=0.3.9",
 ]
 
 [project.optional-dependencies]
