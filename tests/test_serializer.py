@@ -2,6 +2,8 @@ import numpy as np
 import pytest
 from aiida import orm
 
+from aiida_pythonjob.data.serializer import all_serializers
+
 
 class CustomData:
     """Data class that can be serialized to JSON."""
@@ -15,7 +17,7 @@ class CustomData:
         return {"name": self.name, "age": self.age, "array": self.array}
 
     @classmethod
-    def from_json(cls, data):
+    def from_dict(cls, data):
         return cls(data["name"], data["age"], data["array"])
 
 
@@ -44,7 +46,7 @@ class NonJsonableData:
 def test_serialize_aiida(data, data_type):
     from aiida_pythonjob.data.serializer import general_serializer
 
-    serialized_data = general_serializer(data)
+    serialized_data = general_serializer(data, serializers=all_serializers)
     assert isinstance(serialized_data, data_type)
 
 
@@ -54,22 +56,5 @@ def test_serialize_json():
 
     data = CustomData("a", 1, np.zeros((3, 3)))
 
-    serialized_data = general_serializer(data)
+    serialized_data = general_serializer(data, serializers=all_serializers)
     assert isinstance(serialized_data, JsonableData)
-
-
-def test_serialize_pickle():
-    from aiida_pythonjob.config import config
-    from aiida_pythonjob.data.pickled_data import PickledData
-    from aiida_pythonjob.data.serializer import general_serializer
-
-    data = NonJsonableData("a", 1)
-    config["allow_pickle"] = False
-    with pytest.raises(
-        ValueError,
-        match="Cannot serialize type=NonJsonableData. No suitable method found",
-    ):
-        general_serializer(data)
-    config["allow_pickle"] = True
-    serialized_data = general_serializer(data)
-    assert isinstance(serialized_data, PickledData)

@@ -14,7 +14,6 @@ class JsonableData(orm.Data):
       1) Detects multiple possible "to-dict" methods (as_dict, to_dict, todict, etc.)
       2) Converts non-JSON-serializable items (e.g. NumPy arrays) into JSON-friendly formats
       3) Rebuilds the object via one of various possible "from-dict" methods.
-      4) Safely handles `None`.
     """
 
     _DICT_METHODS = ["as_dict", "to_dict", "todict", "asdict"]
@@ -24,14 +23,10 @@ class JsonableData(orm.Data):
     def __init__(self, obj: typing.Any, *args, **kwargs):
         """
         Construct the node for the to-be-wrapped object.
-        If `obj` is None, we simply store a flag indicating that.
         """
         super().__init__(*args, **kwargs)
 
-        if obj is None:
-            self.base.attributes.set("is_none", True)
-            self._obj = None
-            return
+        self._validate_method(obj)
 
         dictionary = self._extract_dict(obj)
 
@@ -50,6 +45,12 @@ class JsonableData(orm.Data):
         self.base.attributes.set_many(serialized)
         self._obj = obj
 
+    def _validate_method(self, obj: typing.Any):
+        if not any(hasattr(obj, method) for method in self._DICT_METHODS):
+            raise ValueError(f"The object must have at least one of the following methods: {self._DICT_METHODS}")
+        if not any(hasattr(obj, method) for method in self._FROM_DICT_METHODS):
+            raise ValueError(f"The object must have at least one of the following methods: {self._FROM_DICT_METHODS}")
+
     def _extract_dict(self, obj: typing.Any) -> dict:
         """
         Attempt to call one of the recognized "to-dict" style methods on `obj` in sequence.
@@ -60,7 +61,7 @@ class JsonableData(orm.Data):
                 return method()
 
         raise TypeError(
-            f"Object `{obj}` does not have any of the following dictionary-conversion " f"methods: {self._DICT_METHODS}"
+            f"Object `{obj}` does not have any of the following dictionary-conversion methods: {self._DICT_METHODS}"
         )
 
     def _make_jsonable(self, data: typing.Any) -> typing.Any:
@@ -107,9 +108,6 @@ class JsonableData(orm.Data):
         Return the wrapped Python object. If not cached in `_obj`,
         we reconstruct it by calling one of the recognized 'from-dict' methods.
         """
-        if self.base.attributes.get("is_none", False):
-            self._obj = None
-            return None
 
         if hasattr(self, "_obj"):
             return self._obj
@@ -154,7 +152,7 @@ class JsonableData(orm.Data):
 
     @property
     def obj(self) -> typing.Any:
-        """Return the wrapped Python object (or None if `is_none` is set)."""
+        """Return the wrapped Python object."""
         return self._get_object()
 
     @property

@@ -1,16 +1,20 @@
 """AiiDA plugin that run Python function on remote computers."""
 
-__version__ = "0.2.5"
+__version__ = "0.4.1"
 
-from .calculations import PythonJob
+from node_graph import socket_spec as spec
+
+from .calculations import PyFunction, PythonJob
 from .decorator import pyfunction
-from .launch import prepare_pythonjob_inputs
+from .launch import prepare_pyfunction_inputs, prepare_pythonjob_inputs
 from .parsers import PythonJobParser
 
 __all__ = (
+    "PyFunction",
     "PythonJob",
-    "pyfunction",
-    "PickledData",
-    "prepare_pythonjob_inputs",
     "PythonJobParser",
+    "prepare_pyfunction_inputs",
+    "prepare_pythonjob_inputs",
+    "pyfunction",
+    "spec",
 )

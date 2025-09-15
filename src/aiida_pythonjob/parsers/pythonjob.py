@@ -3,8 +3,9 @@
 import json
 
 from aiida.parsers.parser import Parser
+from node_graph.socket_spec import SocketSpec
 
-from aiida_pythonjob.utils import parse_outputs
+from .utils import parse_outputs
 
 # Map error_type from script.py to exit code label
 ERROR_TYPE_TO_EXIT_CODE = {
@@ -22,16 +23,12 @@ class PythonJobParser(Parser):
     def parse(self, **kwargs):
         import pickle
 
-        # Read output_ports specification
-        self.output_ports = self.node.inputs.function_data.output_ports.get_dict()
+        # Read outputs SocketSpec
+        spec_dict = self.node.base.attributes.get("outputs_spec", {})
+        self.outputs_spec = SocketSpec.from_dict(spec_dict)
 
         # load custom serializers
-        if "serializers" in self.node.inputs and self.node.inputs.serializers:
-            serializers = self.node.inputs.serializers.get_dict()
-            # replace "__dot__" with "." in the keys
-            self.serializers = {k.replace("__dot__", "."): v for k, v in serializers.items()}
-        else:
-            self.serializers = None
+        self.serializers = self.node.base.attributes.get("serializers", {})
 
         # 1) Read _error.json
         try:
@@ -53,7 +50,7 @@ class PythonJobParser(Parser):
             pass
         except json.JSONDecodeError as exc:
             self.logger.error(f"Error reading _error.json: {exc}")
-            return self.exit_codes.ERROR_INVALID_OUTPUT  # or a different exit code
+            return self.exit_codes.ERROR_INVALID_OUTPUT
 
         # 2) If we reach here, _error.json exists but is empty or doesn't exist at all -> no error recorded
         #    Proceed with parsing results.pickle
@@ -61,9 +58,9 @@ class PythonJobParser(Parser):
             with self.retrieved.base.repository.open("results.pickle", "rb") as handle:
                 results = pickle.load(handle)
 
-                exit_code = parse_outputs(
+                outputs, exit_code = parse_outputs(
                     results,
-                    output_ports=self.output_ports,
+                    output_spec=self.outputs_spec,
                     exit_codes=self.exit_codes,
                     logger=self.logger,
                     serializers=self.serializers,
@@ -72,8 +69,8 @@ class PythonJobParser(Parser):
                     return exit_code
 
                 # Store the outputs
-                for output in self.output_ports["ports"]:
-                    self.out(output["name"], output["value"])
+                for name, value in (outputs or {}).items():
+                    self.out(name, value)
 
         except OSError:
             return self.exit_codes.ERROR_READING_OUTPUT_FILE

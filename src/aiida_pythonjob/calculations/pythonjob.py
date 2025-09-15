@@ -1,5 +1,3 @@
-"""Calcjob to run a Python function on a remote computer, either via raw source code or a pickled function."""
-
 from __future__ import annotations
 
 import pathlib
@@ -9,46 +7,45 @@ from aiida.common.datastructures import CalcInfo, CodeInfo
 from aiida.common.folders import Folder
 from aiida.common.lang import override
 from aiida.engine import CalcJob, CalcJobProcessSpec
-from aiida.orm import (
-    Data,
-    Dict,
-    FolderData,
-    List,
-    RemoteData,
-    SinglefileData,
-    Str,
-    to_aiida_type,
+from aiida.orm import FolderData, List, RemoteData, SinglefileData, Str, to_aiida_type
+
+from aiida_pythonjob.calculations.common import (
+    ATTR_DESERIALIZERS,
+    FunctionProcessMixin,
+    add_common_function_io,
 )
+from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
 
 __all__ = ("PythonJob",)
 
 
-class PythonJob(CalcJob):
-    """Calcjob to run a Python function on a remote computer.
+class PythonJob(FunctionProcessMixin, CalcJob):
+    """CalcJob to run a Python function on a remote computer.
 
     Supports two modes:
-    1) Loading a pickled function object (function_data.pickled_function).
-    2) Embedding raw source code for the function (function_data.source_code).
+    1) Loading a pickled function object (``function_data.pickled_function``).
+    2) Embedding raw source code for the function (``function_data.source_code``).
     """
 
-    _internal_retrieve_list = []
-    _retrieve_singlefile_list = []
-    _retrieve_temporary_list = []
+    _internal_retrieve_list: list[str] = []
+    _retrieve_singlefile_list: list[str] = []
+    _retrieve_temporary_list: list[str] = []
 
     _DEFAULT_INPUT_FILE = "script.py"
     _DEFAULT_OUTPUT_FILE = "aiida.out"
     _DEFAULT_PARENT_FOLDER_NAME = "./parent_folder/"
     _SOURCE_CODE_KEY = "source_code"
 
+    label_template = "PythonJob<{name}>"
+    default_name = "anonymous_function"
+
     @classmethod
     def define(cls, spec: CalcJobProcessSpec) -> None:  # type: ignore[override]
-        """Define the process specification, including its inputs, outputs and known exit codes."""
         super().define(spec)
-        spec.input_namespace("function_data", dynamic=True, required=True)
-        spec.input("function_data.input_ports", valid_type=Dict, serializer=to_aiida_type, required=False)
-        spec.input("function_data.output_ports", valid_type=Dict, serializer=to_aiida_type, required=False)
-        spec.input("process_label", valid_type=Str, serializer=to_aiida_type, required=False)
-        spec.input_namespace("function_inputs", valid_type=Data, required=False)
+        add_common_function_io(spec)
+        spec.outputs.dynamic = True
+
+        # Additional, job-specific inputs
         spec.input(
             "parent_folder",
             valid_type=(RemoteData, FolderData, SinglefileData),
@@ -60,8 +57,10 @@ class PythonJob(CalcJob):
             valid_type=Str,
             required=False,
             serializer=to_aiida_type,
-            help="""Default name of the subfolder to create in the working directory
-            where the files from parent_folder are placed.""",
+            help=(
+                "Default name of the subfolder to create in the working directory "
+                "where the files from parent_folder are placed."
+            ),
         )
         spec.input(
             "parent_output_folder",
@@ -69,7 +68,7 @@ class PythonJob(CalcJob):
             default=None,
             required=False,
             serializer=to_aiida_type,
-            help="Name of the subfolder inside 'parent_folder' from which you want to copy the files",
+            help="Name of the subfolder inside 'parent_folder' from which to copy files",
         )
         spec.input_namespace(
             "upload_files",
@@ -89,33 +88,19 @@ class PythonJob(CalcJob):
             default=None,
             required=False,
             serializer=to_aiida_type,
-            help="Additional filenames to retrieve from the remote work directory",
+            help="Additional filenames to retrieve from the remote working directory",
         )
-        spec.input(
-            "deserializers",
-            valid_type=Dict,
-            default=None,
-            required=False,
-            serializer=to_aiida_type,
-            help="The deserializers to convert the input AiiDA data nodes to raw Python data.",
-        )
-        spec.input(
-            "serializers",
-            valid_type=Dict,
-            default=None,
-            required=False,
-            serializer=to_aiida_type,
-            help="The serializers to convert the raw Python data to AiiDA data nodes.",
-        )
-        spec.outputs.dynamic = True
-        # set default options (optional)
+
+        # Defaults and options
         spec.inputs["metadata"]["options"]["parser_name"].default = "pythonjob.pythonjob"
-        spec.inputs["metadata"]["options"]["input_filename"].default = "script.py"
-        spec.inputs["metadata"]["options"]["output_filename"].default = "aiida.out"
+        spec.inputs["metadata"]["options"]["input_filename"].default = cls._DEFAULT_INPUT_FILE
+        spec.inputs["metadata"]["options"]["output_filename"].default = cls._DEFAULT_OUTPUT_FILE
         spec.inputs["metadata"]["options"]["resources"].default = {
             "num_machines": 1,
             "num_mpiprocs_per_machine": 1,
         }
+
+        # Exit codes (job-specific)
         spec.exit_code(
             310,
             "ERROR_READING_OUTPUT_FILE",
@@ -123,112 +108,136 @@ class PythonJob(CalcJob):
             message="The output file could not be read.",
         )
         spec.exit_code(
-            320,
-            "ERROR_INVALID_OUTPUT",
-            invalidates_cache=True,
-            message="The output file contains invalid output.",
-        )
-        spec.exit_code(
-            321,
-            "ERROR_RESULT_OUTPUT_MISMATCH",
-            invalidates_cache=True,
-            message="The number of results does not match the number of outputs.",
-        )
-        spec.exit_code(
-            322,
+            323,
             "ERROR_IMPORT_CLOUDPICKLE_FAILED",
             invalidates_cache=True,
             message="Importing cloudpickle failed.\n{exception}\n{traceback}",
         )
         spec.exit_code(
-            323,
+            324,
             "ERROR_UNPICKLE_INPUTS_FAILED",
             invalidates_cache=True,
             message="Failed to unpickle inputs.\n{exception}\n{traceback}",
         )
         spec.exit_code(
-            324,
+            325,
             "ERROR_UNPICKLE_FUNCTION_FAILED",
             invalidates_cache=True,
             message="Failed to unpickle user function.\n{exception}\n{traceback}",
         )
         spec.exit_code(
-            325,
+            326,
             "ERROR_FUNCTION_EXECUTION_FAILED",
             invalidates_cache=True,
             message="Function execution failed.\n{exception}\n{traceback}",
         )
         spec.exit_code(
-            326,
+            327,
             "ERROR_PICKLE_RESULTS_FAILED",
             invalidates_cache=True,
             message="Failed to pickle results.\n{exception}\n{traceback}",
         )
         spec.exit_code(
-            327,
+            328,
             "ERROR_SCRIPT_FAILED",
             invalidates_cache=True,
             message="The script failed for an unknown reason.\n{exception}\n{traceback}",
         )
 
-    def get_function_name(self) -> str:
-        """Return the name of the function to run."""
-        if "name" in self.inputs.function_data:
-            name = self.inputs.function_data.name
-        else:
-            name = "anonymous_function"
-        return name
-
-    def _build_process_label(self) -> str:
-        """Use the function name or an explicit label as the process label."""
-        if "process_label" in self.inputs:
-            return self.inputs.process_label.value
-        else:
-            name = self.get_function_name()
-            return f"PythonJob<{name}>"
-
     @override
     def _setup_db_record(self) -> None:
-        """Set up the database record for the process."""
         super()._setup_db_record()
+        # Preserve raw source (if provided) for reproducibility
         if "source_code" in self.inputs.function_data:
             self.node.base.attributes.set(self._SOURCE_CODE_KEY, self.inputs.function_data.source_code)
 
     def on_create(self) -> None:
-        """Called when a Process is created."""
         super().on_create()
         self.node.label = self._build_process_label()
 
+    def _gather_parent_transfers(self) -> tuple[list[tuple], list[tuple]]:
+        """Build remote/local copy lists for the optional ``parent_folder``.
+
+        Returns: ``(remote_list, local_copy_list)``
+        """
+        remote_list: list[tuple] = []
+        local_copy_list: list[tuple] = []
+
+        source = self.inputs.get("parent_folder", None)
+        if source is None:
+            return remote_list, local_copy_list
+
+        # Determine subfolder name in the working directory
+        parent_folder_name = (
+            self.inputs.parent_folder_name.value
+            if "parent_folder_name" in self.inputs
+            else self._DEFAULT_PARENT_FOLDER_NAME
+        )
+
+        if isinstance(source, RemoteData):
+            dirpath_remote = pathlib.Path(source.get_remote_path())
+            if self.inputs.parent_output_folder is not None:
+                dirpath_remote /= self.inputs.parent_output_folder.value
+            remote_list.append((source.computer.uuid, str(dirpath_remote), parent_folder_name))
+        elif isinstance(source, FolderData):
+            dirname = self.inputs.parent_output_folder.value if self.inputs.parent_output_folder is not None else ""
+            local_copy_list.append((source.uuid, dirname, parent_folder_name))
+        elif isinstance(source, SinglefileData):
+            local_copy_list.append((source.uuid, source.filename, source.filename))
+        else:  # pragma: no cover - defensive
+            raise TypeError(f"Unsupported parent_folder type: {type(source)!r}")
+
+        return remote_list, local_copy_list
+
+    def _gather_uploads(self) -> list[tuple]:
+        local_copy_list: list[tuple] = []
+        if "upload_files" not in self.inputs:
+            return local_copy_list
+        for key, src in self.inputs.upload_files.items():
+            new_key = key.replace("_dot_", ".")
+            if isinstance(src, FolderData):
+                local_copy_list.append((src.uuid, "", new_key))
+            elif isinstance(src, SinglefileData):
+                local_copy_list.append((src.uuid, src.filename, src.filename))
+            else:
+                raise ValueError(
+                    f"Input file/folder '{key}' of type {type(src)} is not supported. "
+                    "Only AiiDA SinglefileData and FolderData are allowed."
+                )
+        return local_copy_list
+
+    def _gather_remote_copies(self) -> list[tuple]:
+        remote_list: list[tuple] = []
+        if "copy_files" not in self.inputs:
+            return remote_list
+        for key, src in self.inputs.copy_files.items():
+            new_key = key.replace("_dot_", ".")
+            dirpath_remote = pathlib.Path(src.get_remote_path())
+            remote_list.append((src.computer.uuid, str(dirpath_remote), new_key))
+        return remote_list
+
+    # ---- Core API -------------------------------------------------------
     def prepare_for_submission(self, folder: Folder) -> CalcInfo:
         """Prepare the calculation for submission.
 
-        1) Write the python script to the folder, depending on the mode (source vs. pickled function).
-        2) Write the inputs to a pickle file and save it to the folder.
+        1) Write the python script (source vs pickled function).
+        2) Serialize the inputs (to pickle) and stage any required files.
         """
         import cloudpickle as pickle
 
         from aiida_pythonjob.calculations.utils import generate_script_py
-        from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
 
         dirpath = pathlib.Path(folder._abspath)
 
-        # Prepare the dictionary of input arguments for the function
-        inputs: dict[str, t.Any]
-        if self.inputs.function_inputs:
-            inputs = dict(self.inputs.function_inputs)
-        else:
-            inputs = {}
-
-        # Prepare the final subfolder name for the parent folder
-        if "parent_folder_name" in self.inputs:
-            parent_folder_name = self.inputs.parent_folder_name.value
-        else:
-            parent_folder_name = self._DEFAULT_PARENT_FOLDER_NAME
+        # Deserialize function inputs to raw Python values
+        inputs: dict[str, t.Any] = dict(self.inputs.function_inputs or {})
+        deserializers = self.node.base.attributes.get(ATTR_DESERIALIZERS, {})
+        input_values = deserialize_to_raw_python_data(inputs, deserializers=deserializers)
 
         # Build the Python script
         source_code = self.node.base.attributes.get(self._SOURCE_CODE_KEY, None)
         pickled_function = self.inputs.function_data.pickled_function
-        function_name = self.get_function_name()  # or some user-defined name
+        function_name = self.get_function_name()
         script_content = generate_script_py(
             pickled_function=pickled_function,
             source_code=source_code,
@@ -236,83 +245,40 @@ class PythonJob(CalcJob):
             with_mpi=self.inputs.metadata.options.get("withmpi", False),
         )
 
-        # Write the script to the working folder
+        # Write the script
         with folder.open(self.options.input_filename, "w", encoding="utf8") as handle:
             handle.write(script_content)
 
-        # Symlink or copy approach for the parent folder
+        # Staging strategy
         symlink = True
-        remote_copy_list = []
-        local_copy_list = []
-        remote_symlink_list = []
+        remote_copy_list: list[tuple] = []
+        local_copy_list: list[tuple] = []
+        remote_symlink_list: list[tuple] = []
         remote_list = remote_symlink_list if symlink else remote_copy_list
 
-        source = self.inputs.get("parent_folder", None)
-        if source is not None:
-            if isinstance(source, RemoteData):
-                # Possibly append parent_output_folder path
-                dirpath_remote = pathlib.Path(source.get_remote_path())
-                if self.inputs.parent_output_folder is not None:
-                    dirpath_remote /= self.inputs.parent_output_folder.value
-                remote_list.append(
-                    (
-                        source.computer.uuid,
-                        str(dirpath_remote),
-                        parent_folder_name,
-                    )
-                )
-            elif isinstance(source, FolderData):
-                dirname = self.inputs.parent_output_folder.value if self.inputs.parent_output_folder is not None else ""
-                local_copy_list.append((source.uuid, dirname, parent_folder_name))
-            elif isinstance(source, SinglefileData):
-                local_copy_list.append((source.uuid, source.filename, source.filename))
+        # Parent folder transfers
+        parent_remote, parent_local = self._gather_parent_transfers()
+        remote_list.extend(parent_remote)
+        local_copy_list.extend(parent_local)
 
         # Upload additional files
-        if "upload_files" in self.inputs:
-            upload_files = self.inputs.upload_files
-            for key, src in upload_files.items():
-                # replace "_dot_" with "." in the key
-                new_key = key.replace("_dot_", ".")
-                if isinstance(src, FolderData):
-                    local_copy_list.append((src.uuid, "", new_key))
-                elif isinstance(src, SinglefileData):
-                    local_copy_list.append((src.uuid, src.filename, src.filename))
-                else:
-                    raise ValueError(
-                        f"Input file/folder '{key}' of type {type(src)} is not supported. "
-                        "Only AiiDA SinglefileData and FolderData are allowed."
-                    )
+        local_copy_list.extend(self._gather_uploads())
 
         # Copy remote data if any
-        if "copy_files" in self.inputs:
-            copy_files = self.inputs.copy_files
-            for key, src in copy_files.items():
-                new_key = key.replace("_dot_", ".")
-                dirpath_remote = pathlib.Path(src.get_remote_path())
-                remote_list.append((src.computer.uuid, str(dirpath_remote), new_key))
+        remote_list.extend(self._gather_remote_copies())
 
         # Create a pickle file for the user input values
-        input_values = {}
-        if "deserializers" in self.inputs and self.inputs.deserializers:
-            deserializers = self.inputs.deserializers.get_dict()
-            # replace "__dot__" with "." in the keys
-            deserializers = {k.replace("__dot__", "."): v for k, v in deserializers.items()}
-        else:
-            deserializers = None
-        input_values = deserialize_to_raw_python_data(inputs, deserializers=deserializers)
-
         filename = "inputs.pickle"
         with folder.open(filename, "wb") as handle:
             pickle.dump(input_values, handle)
 
-        # If using a pickled function, we also need to upload the function pickle
+        # If using a pickled function, also stage it
         if pickled_function:
-            # create a SinglefileData object for the pickled function
             function_pkl_fname = "function.pkl"
             with folder.open(function_pkl_fname, "wb") as handle:
                 handle.write(pickled_function)
 
-        # create a singlefiledata object for the pickled data
+        # Stage the inputs pickle via a transient SinglefileData to leverage AiiDA transport
         file_data = SinglefileData(file=f"{dirpath}/{filename}")
         file_data.store()
         local_copy_list.append((file_data.uuid, file_data.filename, filename))

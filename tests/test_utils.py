@@ -1,4 +1,5 @@
 import pytest
+
 from aiida_pythonjob.utils import build_function_data
 
 

@@ -5,11 +5,12 @@ import logging
 import signal
 import sys
 import typing as t
-from typing import Any, Mapping
+from typing import List
 
 from aiida.engine.processes.functions import FunctionType, get_stack_size
 from aiida.manage import get_manager
 from aiida.orm import ProcessNode
+from node_graph.socket_spec import SocketSpec
 
 from aiida_pythonjob.calculations.pyfunction import PyFunction
 from aiida_pythonjob.launch import create_inputs, prepare_pyfunction_inputs
@@ -19,8 +20,8 @@ LOGGER = logging.getLogger(__name__)
 
 # The following code is modified from the aiida-core.engine.processes.functions module
 def pyfunction(
-    inputs: t.Optional[Mapping[str, Any]] = None,
-    outputs: t.Optional[t.List[Mapping[str, Any]]] = None,
+    inputs: t.Optional[SocketSpec | List[str]] = None,
+    outputs: t.Optional[t.List[SocketSpec | List[str]]] = None,
 ) -> t.Callable[[FunctionType], FunctionType]:
     """The base function decorator to create a FunctionProcess out of a normal python function.
 
@@ -60,8 +61,8 @@ def pyfunction(
             manager = get_manager()
             runner = manager.get_runner()
             # # Remove all the known inputs from the kwargs
-            output_ports = kwargs.pop("output_ports", None) or outputs
-            input_ports = kwargs.pop("input_ports", None) or inputs
+            outputs_spec = kwargs.pop("outputs_spec", None) or outputs
+            inputs_spec = kwargs.pop("inputs_spec", None) or inputs
             metadata = kwargs.pop("metadata", None)
             function_data = kwargs.pop("function_data", None)
             deserializers = kwargs.pop("deserializers", None)
@@ -73,8 +74,8 @@ def pyfunction(
             process_inputs = prepare_pyfunction_inputs(
                 function=function,
                 function_inputs=function_inputs,
-                input_ports=input_ports,
-                output_ports=output_ports,
+                inputs_spec=inputs_spec,
+                outputs_spec=outputs_spec,
                 metadata=metadata,
                 process_label=process_label,
                 function_data=function_data,

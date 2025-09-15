@@ -5,6 +5,8 @@ import tempfile
 import pytest
 from aiida import orm
 from aiida.engine import run_get_node
+from node_graph import socket_spec as spec
+
 from aiida_pythonjob import PythonJob, prepare_pythonjob_inputs
 
 
@@ -12,14 +14,25 @@ def test_validate_inputs(fixture_localhost):
     def add(x, y):
         return x + y
 
-    with pytest.raises(ValueError, match="Either function or function_data must be provided"):
+    with pytest.raises(ValueError, match="Either `function` or `function_data` must be provided."):
         prepare_pythonjob_inputs(
             function_inputs={"x": 1, "y": 2},
         )
-    with pytest.raises(ValueError, match="Only one of function or function_data should be provided"):
+    with pytest.raises(ValueError, match="Only one of `function` or `function_data` should be provided."):
         prepare_pythonjob_inputs(
             function=add,
             function_data={"module_path": "math", "name": "sqrt", "is_pickle": False},
+        )
+
+
+def test_validate_function_inputs(fixture_localhost):
+    def add(x, y):
+        return x + y
+
+    with pytest.raises(ValueError, match="Invalid function inputs: missing a required argument"):
+        prepare_pythonjob_inputs(
+            function=add,
+            function_inputs={"x": 1},
         )
 
 
@@ -49,10 +62,7 @@ def test_function_custom_outputs(fixture_localhost):
     inputs = prepare_pythonjob_inputs(
         add,
         function_inputs={"x": 1, "y": 2},
-        output_ports=[
-            {"name": "sum"},
-            {"name": "diff"},
-        ],
+        outputs_spec=spec.namespace(sum=any, diff=any),
     )
     result, node = run_get_node(PythonJob, **inputs)
 
@@ -69,13 +79,10 @@ def test_importable_function(fixture_localhost):
     inputs = prepare_pythonjob_inputs(
         add,
         function_inputs={"x": 1, "y": 2},
-        output_ports=[
-            {"name": "sum"},
-        ],
     )
     result, node = run_get_node(PythonJob, **inputs)
     print("result: ", result)
-    assert result["sum"].value == 3
+    assert result["result"].value == 3
 
 
 def test_kwargs_inputs(fixture_localhost):
@@ -90,12 +97,9 @@ def test_kwargs_inputs(fixture_localhost):
     inputs = prepare_pythonjob_inputs(
         add,
         function_inputs={"x": 1, "y": 2, "a": 3, "b": 4},
-        output_ports=[
-            {"name": "sum"},
-        ],
     )
     result, node = run_get_node(PythonJob, **inputs)
-    assert result["sum"].value == 10
+    assert result["result"].value == 10
 
 
 def test_namespace_output(fixture_localhost):
@@ -111,14 +115,10 @@ def test_namespace_output(fixture_localhost):
     inputs = prepare_pythonjob_inputs(
         myfunc,
         function_inputs={"x": 1, "y": 2},
-        output_ports=[
-            {
-                "name": "add_multiply",
-                "identifier": "namespace",
-                "ports": [{"name": "add", "identifier": "namespace"}, "multiply"],
-            },
-            {"name": "minus"},
-        ],
+        outputs_spec=spec.namespace(
+            add_multiply=spec.namespace(add=spec.dynamic(any), multiply=any),
+            minus=any,
+        ),
     )
     result, node = run_get_node(PythonJob, **inputs)
     print("result: ", result)
@@ -145,19 +145,18 @@ def test_parent_folder_remote(fixture_localhost):
     inputs1 = prepare_pythonjob_inputs(
         add,
         function_inputs={"x": 1, "y": 2},
-        output_ports=[{"name": "sum"}],
     )
     result1, node1 = run_get_node(PythonJob, inputs=inputs1)
 
     inputs2 = prepare_pythonjob_inputs(
         multiply,
         function_inputs={"x": 1, "y": 2},
-        output_ports=[{"name": "product"}],
         parent_folder=result1["remote_folder"],
     )
     result2, node2 = run_get_node(PythonJob, inputs=inputs2)
+    print("result2: ", result2)
 
-    assert result2["product"].value == 5
+    assert result2["result"].value == 5
 
 
 def test_parent_folder_local(fixture_localhost):
@@ -178,12 +177,11 @@ def test_parent_folder_local(fixture_localhost):
         inputs2 = prepare_pythonjob_inputs(
             multiply,
             function_inputs={"x": 1, "y": 2},
-            output_ports=[{"name": "product"}],
             parent_folder=parent_folder,
         )
         result2, node2 = run_get_node(PythonJob, inputs=inputs2)
 
-        assert result2["product"].value == 5
+        assert result2["result"].value == 5
 
 
 def test_upload_files(fixture_localhost):

@@ -9,7 +9,6 @@ from aiida import common, orm
 
 from aiida_pythonjob.data.jsonable_data import JsonableData
 
-from .deserializer import all_deserializers
 from .utils import import_from_path
 
 
@@ -18,23 +17,32 @@ def atoms_to_structure_data(structure):
 
 
 def get_serializers_from_entry_points() -> dict:
-    # Retrieve the entry points for 'aiida.data' and store them in a dictionary
-    eps = entry_points()
+    """Retrieve the entry points for 'aiida.data' and store them in a dictionary."""
+    eps_all = entry_points()
     if sys.version_info >= (3, 10):
-        group = eps.select(group="aiida.data")
+        group = eps_all.select(group="aiida.data")
     else:
-        group = eps.get("aiida.data", [])
-    eps = {}
-    for ep in group:
+        group = eps_all.get("aiida.data", [])
+
+    # By converting the group to a set, we remove accidental duplicates
+    # where the same EntryPoint object is discovered twice. Legitimate
+    # competing entry points from different packages will remain.
+    unique_group = set(group)
+
+    serializers = {}
+    for ep in unique_group:
         # split the entry point name by first ".", and check the last part
         key = ep.name.split(".", 1)[-1]
+
         # skip key without "." because it is not a module name for a data type
         if "." not in key:
             continue
-        eps.setdefault(key, [])
+
+        serializers.setdefault(key, [])
         # get the path of the entry point value and replace ":" with "."
-        eps[key].append(ep.value.replace(":", "."))
-    return eps
+        serializers[key].append(ep.value.replace(":", "."))
+
+    return serializers
 
 
 def get_serializers() -> dict:
@@ -61,7 +69,7 @@ def get_serializers() -> dict:
 all_serializers = get_serializers()
 
 
-def serialize_to_aiida_nodes(inputs: dict, serializers: dict | None = None, deserializers: dict | None = None) -> dict:
+def serialize_to_aiida_nodes(inputs: dict, serializers: dict | None = None) -> dict:
     """Serialize the inputs to a dictionary of AiiDA data nodes.
 
     Args:
@@ -73,7 +81,7 @@ def serialize_to_aiida_nodes(inputs: dict, serializers: dict | None = None, dese
     new_inputs = {}
     # save all kwargs to inputs port
     for key, data in inputs.items():
-        new_inputs[key] = general_serializer(data, serializers=serializers, deserializers=deserializers)
+        new_inputs[key] = general_serializer(data, serializers=serializers)
     return new_inputs
 
 
@@ -87,35 +95,16 @@ def clean_dict_key(data):
 def general_serializer(
     data: Any,
     serializers: dict | None = None,
-    deserializers: dict | None = None,
-    check_value: bool = True,
     store: bool = True,
 ) -> orm.Node:
     """
     Attempt to serialize the data to an AiiDA data node based on the preference from `config`:
       1) AiiDA data only, 2) JSON-serializable, 3) fallback to PickledData (if allowed).
     """
-    from aiida_pythonjob.config import config
-
-    # Merge user-provided config with defaults
-    allow_json = config.get("allow_json", True)
-    allow_pickle = config.get("allow_pickle", False)
-
-    updated_deserializers = all_deserializers.copy()
-    if deserializers is not None:
-        updated_deserializers.update(deserializers)
-
-    updated_serializers = all_serializers.copy()
-    if serializers is not None:
-        updated_serializers.update(serializers)
+    serializers = serializers or all_serializers
 
     # 1) If it is already an AiiDA node, just return it
     if isinstance(data, orm.Data):
-        if check_value and not hasattr(data, "value"):
-            data_type = type(data)
-            ep_key = f"{data_type.__module__}.{data_type.__name__}"
-            if ep_key not in updated_deserializers:
-                raise ValueError(f"AiiDA data: {ep_key}, does not have a `value` attribute or deserializer.")
         return data
     elif isinstance(data, common.extendeddicts.AttributeDict):
         # if the data is an AttributeDict, use it directly
@@ -124,9 +113,9 @@ def general_serializer(
     # 3) check entry point
     data_type = type(data)
     ep_key = f"{data_type.__module__}.{data_type.__name__}"
-    if ep_key in updated_serializers:
+    if ep_key in serializers:
         try:
-            serializer = import_from_path(updated_serializers[ep_key])
+            serializer = import_from_path(serializers[ep_key])
             new_node = serializer(data)
             if store:
                 new_node.store()
@@ -135,30 +124,33 @@ def general_serializer(
             error_traceback = traceback.format_exc()
             raise ValueError(f"Error in serializing {ep_key}: {error_traceback}")
 
-    #    check if we can JSON-serialize the data
-    if allow_json:
-        try:
-            node = JsonableData(data)
-            if store:
-                node.store()
-            return node
-        except (TypeError, ValueError):
-            # print(f"Error in JSON-serializing {type(data).__name__}")
-            pass
-
-    # fallback to pickling
-    if allow_pickle:
-        from .pickled_data import PickledData
-
-        try:
-            new_node = PickledData(data)
-            if store:
-                new_node.store()
-            return new_node
-        except Exception as e:
-            raise ValueError(f"Error in pickling {type(data).__name__}: {e}")
-
-    raise ValueError(
-        f"Cannot serialize type={type(data).__name__}. No suitable method found "
-        f"(json_allowed={allow_json}, pickle_allowed={allow_pickle})."
-    )
+    try:
+        node = JsonableData(data)
+        if store:
+            node.store()
+        return node
+    except (TypeError, ValueError):
+        suggestions = [
+            "How to fix:",
+            "1) Register a type-specific AiiDA Data class as an `aiida.data` entry point "
+            "(recommended for domain objects).",
+            "   Example in `pyproject.toml`:",
+            '   [project.entry-points."aiida.data"]',
+            f'   myplugin.{ep_key} = "myplugin.data.mytype:MyTypeData"',
+            "   where `MyTypeData` is a subclass of `aiida.orm.Data` that knows how to store your object.",
+            "",
+            "2) Or make the class JSON-serializable so `JsonableData` can handle it by implementing:",
+            "   - `to_dict()` / `as_dict()` (any one) returning only JSON-friendly structures, and",
+            "   - `from_dict(cls, dct)` / `fromdict(cls, dct)` to rebuild the object later.",
+            "",
+            "3) Or pass an ad-hoc serializer function via the `serializers` argument:",
+            f"   general_serializer(obj, serializers={{'{ep_key}': 'my_pkg.mod:to_aiida_node'}})",
+            "   where `to_aiida_node(obj)` returns an `aiida.orm.Data` instance.",
+        ]
+        raise ValueError(
+            (
+                "Cannot serialize the provided object.\n\n"
+                f"Type: {ep_key}\n"
+                f"Tried entry-point key: '{ep_key}' — not found in provided serializers.\n" + "\n".join(suggestions)
+            )
+        )

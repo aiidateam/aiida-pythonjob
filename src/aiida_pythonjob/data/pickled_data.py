@@ -21,7 +21,7 @@ class PickledData(orm.Data):
         self.set_value(value)
 
     def __str__(self):
-        return f"{super().__str__()} : {self.get_value()}"
+        return f"<PickledData: {super().__str__()} : {self.get_value()}>"
 
     @property
     def value(self):

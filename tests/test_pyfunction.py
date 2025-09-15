@@ -1,14 +1,18 @@
+import pytest
 from aiida import orm
 from aiida.engine import run_get_node
-from aiida_pythonjob import pyfunction
+from node_graph import socket_spec as spec
+
+from aiida_pythonjob import PyFunction, prepare_pyfunction_inputs, pyfunction
+
+
+@pyfunction()
+def add(x, y):
+    return x + y
 
 
 def test_function_default_outputs(fixture_localhost):
     """Test decorator."""
-
-    @pyfunction()
-    def add(x, y):
-        return x + y
 
     result, node = run_get_node(add, x=1, y=2)
 
@@ -16,17 +20,22 @@ def test_function_default_outputs(fixture_localhost):
     assert node.process_label == "add"
 
 
-def test_output_tuple():
-    @pyfunction(
-        outputs=[
-            {"name": "sum"},
-            {"name": "diff"},
-        ]
+def test_prepare_pyfunction_inputs():
+    """Test prepare_pyfunction_inputs utility function."""
+    inputs = prepare_pyfunction_inputs(
+        add,
+        function_inputs={"x": 1, "y": 2},
     )
+    result, _ = run_get_node(PyFunction, **inputs)
+    assert result["result"].value == 3
+
+
+def test_output_tuple():
+    @pyfunction(outputs=spec.namespace(sum=int, diff=int))
     def add(x, y):
         return x + y, x - y
 
-    result, node = run_get_node(add, x=1, y=2)
+    result, _ = run_get_node(add, x=1, y=2)
 
     assert result["sum"].value == 3
     assert result["diff"].value == -1
@@ -35,12 +44,7 @@ def test_output_tuple():
 def test_function_custom_outputs():
     """Test decorator."""
 
-    @pyfunction(
-        outputs=[
-            {"name": "sum"},
-            {"name": "diff"},
-        ]
-    )
+    @pyfunction(outputs=spec.namespace(sum=int, diff=int))
     def add(x, y):
         return {"sum": x + y, "diff": x - y}
 
@@ -53,8 +57,8 @@ def test_function_custom_outputs():
 
 def test_function_custom_inputs_outputs():
     @pyfunction(
-        inputs=[{"name": "volumes", "identifier": "namespace"}, {"name": "energies", "identifier": "namespace"}],
-        outputs=[{"name": "volumes", "identifier": "namespace"}, {"name": "energies", "identifier": "namespace"}],
+        inputs=spec.namespace(volumes=spec.dynamic(any), energies=spec.dynamic(any)),
+        outputs=spec.namespace(volumes=spec.dynamic(any), energies=spec.dynamic(any)),
     )
     def plot_eos(volumes, energies):
         return {"volumes": volumes, "energies": energies}
@@ -75,7 +79,7 @@ def test_importable_function():
 def test_kwargs_inputs():
     """Test function with kwargs."""
 
-    @pyfunction(outputs=[{"name": "sum"}])
+    @pyfunction()
     def add(x, y=1, **kwargs):
         x += y
         for value in kwargs.values():
@@ -83,23 +87,20 @@ def test_kwargs_inputs():
         return x
 
     result, _ = run_get_node(add, x=1, y=2, a=3, b=4)
-    assert result["sum"].value == 10
+    assert result.value == 10
 
 
 def test_namespace_output():
     """Test function with namespace output and input."""
 
-    @pyfunction(
-        outputs=[
-            {
-                "name": "add_multiply",
-                "identifier": "namespace",
-                "ports": [{"name": "add", "identifier": "namespace"}, "multiply"],
-            },
-            {"name": "minus"},
-        ]
+    out = spec.namespace(
+        add_multiply=spec.namespace(add=spec.dynamic(any), multiply=any),
+        minus=any,
     )
+
+    @pyfunction(outputs=out)
     def myfunc(x, y):
+        """Function that returns a namespace output."""
         add = {"order1": x + y, "order2": x * x + y * y}
         return {
             "add_multiply": {"add": add, "multiply": x * y},
@@ -129,14 +130,10 @@ def test_override_outputs():
         myfunc,
         x=1,
         y=2,
-        output_ports=[
-            {
-                "name": "add_multiply",
-                "identifier": "namespace",
-                "ports": [{"name": "add", "identifier": "namespace"}],
-            },
-            {"name": "minus"},
-        ],
+        outputs_spec=spec.namespace(
+            add_multiply=spec.namespace(add=spec.dynamic(any), multiply=any),
+            minus=any,
+        ),
     )
 
     assert result["add_multiply"]["add"]["order1"].value == 3
@@ -152,7 +149,7 @@ def test_function_execution_failed():
         return math.sqrt(x)
 
     _, node = run_get_node(add, x=-2)
-    assert node.exit_status == 325
+    assert node.exit_status == 323
 
 
 def test_exit_code():
@@ -180,17 +177,13 @@ def test_aiida_node_as_inputs_outputs():
         return {"sum": orm.Int(x + y), "diff": orm.Int(x - y)}
 
     result, node = run_get_node(add, x=orm.Int(1), y=orm.Int(2))
+    print("result: ", result)
     assert set(result.keys()) == {"sum", "diff"}
     assert result["sum"].value == 3
 
 
 def test_missing_output():
-    @pyfunction(
-        outputs=[
-            {"name": "sum"},
-            {"name": "diff"},
-        ]
-    )
+    @pyfunction(outputs=spec.namespace(sum=int, diff=int))
     def add(x, y):
         return {"sum": x + y}
 
@@ -202,44 +195,16 @@ def test_missing_output():
 def test_nested_inputs_outputs():
     """Test function with nested inputs and outputs."""
 
-    @pyfunction(
-        inputs=[
-            {
-                "name": "input1",
-                "identifier": "namespace",
-                "ports": [
-                    {"name": "x1"},
-                    {"name": "y1"},
-                ],
-            },
-            {
-                "name": "input1",
-                "identifier": "namespace",
-                "ports": [
-                    {"name": "x2"},
-                    {"name": "y2"},
-                ],
-            },
-        ],
-        outputs=[
-            {
-                "name": "result1",
-                "identifier": "namespace",
-                "ports": [
-                    {"name": "sum1"},
-                    {"name": "diff1"},
-                ],
-            },
-            {
-                "name": "result2",
-                "identifier": "namespace",
-                "ports": [
-                    {"name": "sum2"},
-                    {"name": "diff2"},
-                ],
-            },
-        ],
+    inp = spec.namespace(
+        input1=spec.namespace(x=int, y=int),
+        input2=spec.namespace(x=int, y=int),
     )
+    out = spec.namespace(
+        result1=spec.namespace(sum1=int, diff1=int),
+        result2=spec.namespace(sum2=int, diff2=int),
+    )
+
+    @pyfunction(inputs=inp, outputs=out)
     def add(input1, input2):
         return {
             "result1": {"sum1": input1["x"] + input1["y"], "diff1": input1["x"] - input1["y"]},
@@ -252,3 +217,58 @@ def test_nested_inputs_outputs():
     assert node.outputs.result1.diff1.value == -1
     assert node.outputs.result2.sum2.value == 4
     assert node.outputs.result2.diff2.value == -2
+
+
+def test_top_level_outputs_dynamic():
+    """Test function with dynamic top-level outputs."""
+
+    @pyfunction(outputs=spec.dynamic(any))
+    def test_dynamic(n: int):
+        return {f"data_{i}": i for i in range(n)}
+
+    result, node = run_get_node(
+        test_dynamic,
+        n=3,
+    )
+
+    # outputs should be serialized as dynamic rows
+    assert node.outputs.data_0.value == 0
+    assert node.outputs.data_1.value == 1
+
+
+def test_dynamic_rows():
+    """Test function with dynamic rows."""
+
+    row = spec.namespace(sum=any, product=any)
+
+    @pyfunction(outputs=spec.dynamic(row, sum=int))
+    def test_dynamic_rows(data: spec.dynamic(row, sum=int)):
+        return data
+
+    result, node = run_get_node(
+        test_dynamic_rows,
+        data={
+            "data_0": {"sum": 0, "product": 0},
+            "data_1": {"sum": 1, "product": 2},
+            "data_2": {"sum": 2, "product": 4},
+            "sum": 1,
+        },
+    )
+
+    # inputs should be serialized as dynamic rows
+    assert node.inputs.function_inputs.data.sum.value == 1
+    assert node.inputs.function_inputs.data.data_0.sum.value == 0
+    # outputs should be serialized as dynamic rows
+    assert node.outputs.sum.value == 1
+    assert node.outputs.data_0.sum.value == 0
+
+
+def test_only_data_with_value():
+    from aiida import orm
+
+    @pyfunction()
+    def add(x, y):
+        return x + y
+
+    with pytest.raises(ValueError, match="Cannot deserialize AiiDA data of type"):
+        run_get_node(add, x=1, y=orm.XyData())
