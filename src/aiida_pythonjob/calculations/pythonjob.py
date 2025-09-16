@@ -284,7 +284,7 @@ class PythonJob(FunctionProcessMixin, CalcJob):
         local_copy_list.append((file_data.uuid, file_data.filename, filename))
 
         codeinfo = CodeInfo()
-        if self.options.get('withmpi', False):
+        if self.options.get("withmpi", False):
             codeinfo.cmdline_params = [self.options.input_filename]
         else:
             codeinfo.stdin_name = self.options.input_filename
