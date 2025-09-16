@@ -242,7 +242,7 @@ class PythonJob(FunctionProcessMixin, CalcJob):
             pickled_function=pickled_function,
             source_code=source_code,
             function_name=function_name,
-            with_mpi=self.inputs.metadata.options.get("withmpi", False),
+            withmpi=self.inputs.metadata.options.get("withmpi", False),
         )
 
         # Write the script

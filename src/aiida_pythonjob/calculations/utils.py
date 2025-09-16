@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 def generate_script_py(
-    pickled_function: bytes | None, source_code: str | None, function_name: str = "user_function", with_mpi: bool = False
+    pickled_function: bytes | None, source_code: str | None, function_name: str = "user_function", withmpi: bool = False
 ) -> str:
     """
     Generate the script.py content as a single string with robust exception handling.
@@ -16,8 +16,24 @@ def generate_script_py(
     script_lines = [
         "import sys",
         "import json",
+    ]
+    if withmpi:
+        script_lines += [
+            "import os",
+        ]
+    script_lines += [
         "import traceback",
         "",
+    ]
+    if withmpi:
+        script_lines += [
+            "try:",
+            "   from mpi4py import MPI",
+            "   RANK = MPI.COMM_WORLD.Get_rank()",
+            "except ImportError:",
+            "   raise ImportError('mpi4py is required for MPI execution but is not installed.')",
+        ]
+    script_lines += [
         "def write_error_file(error_type, exc, traceback_str):",
         "    # Write an error file to disk so the parser can detect the error",
         "    error_data = {",
@@ -45,19 +61,6 @@ def generate_script_py(
         "        sys.exit(1)",
         "",
     ]
-    if with_mpi:
-        script_lines.insert(
-            2,
-            "import os"
-        )
-        mpi_lines_to_add = [
-            "try:",
-            "   from mpi4py import MPI",
-            "   RANK = MPI.COMM_WORLD.Get_rank()",
-            "except ImportError:",
-            "   RANK = int(os.environ.get('SLURM_PROCID', os.environ.get('OMPI_COMM_WORLD_RANK', '0')))"
-        ]
-        script_lines[5:5] = mpi_lines_to_add
 
     if pickled_function:
         # Mode 1: pickled function
@@ -101,7 +104,7 @@ def generate_script_py(
         "    # 5) Attempt to pickle the result",
         "    try:",
     ]
-    if with_mpi:
+    if withmpi:
         script_lines += [
             "        if RANK == 0:",  # Only the root process saves the result
             "            with open('results.pickle', 'wb') as handle:",
