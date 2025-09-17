@@ -17,22 +17,17 @@ def generate_script_py(
         "import sys",
         "import json",
     ]
+
     if withmpi:
         script_lines += [
             "import os",
         ]
+
     script_lines += [
         "import traceback",
         "",
     ]
-    if withmpi:
-        script_lines += [
-            "try:",
-            "   from mpi4py import MPI",
-            "   RANK = MPI.COMM_WORLD.Get_rank()",
-            "except ImportError:",
-            "   raise ImportError('mpi4py is required for MPI execution but is not installed.')",
-        ]
+
     script_lines += [
         "def write_error_file(error_type, exc, traceback_str):",
         "    # Write an error file to disk so the parser can detect the error",
@@ -52,6 +47,23 @@ def generate_script_py(
         "        write_error_file('IMPORT_CLOUDPICKLE_FAILED', e, traceback.format_exc())",
         "        sys.exit(1)",
         "",
+    ]
+
+    if withmpi:
+        script_lines += [
+            "    # Attempt to import mpi4py",
+            "    try:",
+            "        from mpi4py import MPI",
+            "    except ImportError as e:",
+            "        write_error_file('IMPORT_MPI4PY_FAILED', e, traceback.format_exc())",
+            "        sys.exit(1)",
+            "",
+            "    # MPI initialization",
+            "    RANK = MPI.COMM_WORLD.Get_rank()",
+            "",
+        ]
+
+    script_lines += [
         "    # 2) Attempt to unpickle the inputs",
         "    try:",
         "        with open('inputs.pickle', 'rb') as handle:",

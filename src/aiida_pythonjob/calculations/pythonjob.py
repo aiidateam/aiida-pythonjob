@@ -143,6 +143,12 @@ class PythonJob(FunctionProcessMixin, CalcJob):
             invalidates_cache=True,
             message="The script failed for an unknown reason.\n{exception}\n{traceback}",
         )
+        spec.exit_code(
+            329,
+            "ERROR_IMPORT_MPI4PY_FAILED",
+            invalidates_cache=True,
+            message="Trying to run with MPI support, but importing mpi4py failed.\n{exception}\n{traceback}",
+        )
 
     @override
     def _setup_db_record(self) -> None:
