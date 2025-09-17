@@ -16,19 +16,8 @@ def generate_script_py(
     script_lines = [
         "import sys",
         "import json",
-    ]
-
-    if withmpi:
-        script_lines += [
-            "import os",
-        ]
-
-    script_lines += [
         "import traceback",
         "",
-    ]
-
-    script_lines += [
         "def write_error_file(error_type, exc, traceback_str):",
         "    # Write an error file to disk so the parser can detect the error",
         "    error_data = {",
