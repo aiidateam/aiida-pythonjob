@@ -211,6 +211,26 @@ inputs = prepare_pythonjob_inputs(
 result, node = run_get_node(PythonJob, inputs=inputs)
 print("retrieved files: ", result["retrieved"].list_object_names())
 
+######################################################################
+# Using MPI for parallel execution
+# --------------
+# If your function uses MPI for parallel execution, you can set the `withmpi`
+# option to `True` in the `metadata.options` dictionary. This will ensure that
+# the job is executed using `mpirun` or an equivalent command on the (remote)
+# computer.
+#
+# .. code-block:: python
+#
+#     metadata = {
+#         "options": {
+#             'withmpi': True,
+#         }
+#     }
+#
+#
+#
+# **Note:** In order to run MPI jobs, the remote computer must have installed
+# the `mpi4py` package in the Python environment.
 
 ######################################################################
 # What if my calculation fails?

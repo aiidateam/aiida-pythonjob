@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 def generate_script_py(
-    pickled_function: bytes | None, source_code: str | None, function_name: str = "user_function"
+    pickled_function: bytes | None, source_code: str | None, function_name: str = "user_function", withmpi: bool = False
 ) -> str:
     """
     Generate the script.py content as a single string with robust exception handling.
@@ -36,6 +36,23 @@ def generate_script_py(
         "        write_error_file('IMPORT_CLOUDPICKLE_FAILED', e, traceback.format_exc())",
         "        sys.exit(1)",
         "",
+    ]
+
+    if withmpi:
+        script_lines += [
+            "    # Attempt to import mpi4py",
+            "    try:",
+            "        from mpi4py import MPI",
+            "    except ImportError as e:",
+            "        write_error_file('IMPORT_MPI4PY_FAILED', e, traceback.format_exc())",
+            "        sys.exit(1)",
+            "",
+            "    # MPI initialization",
+            "    RANK = MPI.COMM_WORLD.Get_rank()",
+            "",
+        ]
+
+    script_lines += [
         "    # 2) Attempt to unpickle the inputs",
         "    try:",
         "        with open('inputs.pickle', 'rb') as handle:",
@@ -87,8 +104,19 @@ def generate_script_py(
         "",
         "    # 5) Attempt to pickle the result",
         "    try:",
-        "        with open('results.pickle', 'wb') as handle:",
-        "            pickle.dump(result, handle)",
+    ]
+    if withmpi:
+        script_lines += [
+            "        if RANK == 0:",  # Only the root process saves the result
+            "            with open('results.pickle', 'wb') as handle:",
+            "                pickle.dump(result, handle)",
+        ]
+    else:
+        script_lines += [
+            "        with open('results.pickle', 'wb') as handle:",
+            "            pickle.dump(result, handle)",
+        ]
+    script_lines += [
         "    except Exception as e:",
         "        write_error_file('PICKLE_RESULTS_FAILED', e, traceback.format_exc())",
         "        sys.exit(1)",
