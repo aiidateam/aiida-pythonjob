@@ -8,7 +8,7 @@ import typing as t
 import cloudpickle
 import plumpy
 from aiida.common.lang import override
-from aiida.engine import Process, ProcessSpec
+from aiida.engine import Process, ProcessSpec, ProcessState
 from aiida.engine.processes.exit_code import ExitCode
 from aiida.orm import CalcFunctionNode
 from node_graph.socket_spec import SocketSpec
@@ -23,12 +23,12 @@ from aiida_pythonjob.calculations.common import (
 from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
 from aiida_pythonjob.parsers.utils import parse_outputs
 
+from .tasks import Waiting
+
 __all__ = ("PyFunction",)
 
 
 class PyFunction(FunctionProcessMixin, Process):
-    """Run a Python function in-process, using :class:`SocketSpec` for I/O."""
-
     _node_class = CalcFunctionNode
     label_template = "{name}"
     default_name = "anonymous_function"
@@ -76,6 +76,12 @@ class PyFunction(FunctionProcessMixin, Process):
             message="Function execution failed.\n{exception}\n{traceback}",
         )
 
+    @classmethod
+    def get_state_classes(cls) -> t.Dict[t.Hashable, t.Type[plumpy.process_states.State]]:
+        states_map = super().get_state_classes()
+        states_map[ProcessState.WAITING] = Waiting
+        return states_map
+
     @override
     def _setup_db_record(self) -> None:
         super()._setup_db_record()
@@ -89,12 +95,19 @@ class PyFunction(FunctionProcessMixin, Process):
         return result
 
     @override
-    def run(self) -> ExitCode | None:
-        # Respect caching semantics (from aiida-core calcfunction implementation)
+    async def run(self) -> t.Union[plumpy.process_states.Stop, int, plumpy.process_states.Wait]:
+        import asyncio
+
         if self.node.exit_status is not None:
             return ExitCode(self.node.exit_status, self.node.exit_message)
 
-        # Deserialize inputs
+        func = self.func
+
+        # Async user function -> schedule via Waiting (interruptable)
+        if asyncio.iscoroutinefunction(func):
+            return plumpy.process_states.Wait(msg="Waiting to run")
+
+        # Sync user function -> execute now, parse outputs, and finish
         try:
             inputs = dict(self.inputs.function_inputs or {})
             deserializers = self.node.base.attributes.get(ATTR_DESERIALIZERS, {})
@@ -104,7 +117,6 @@ class PyFunction(FunctionProcessMixin, Process):
                 exception=str(exception), traceback=traceback.format_exc()
             )
 
-        # Execute function
         try:
             results = self.func(**inputs)
         except Exception as exception:
@@ -112,9 +124,17 @@ class PyFunction(FunctionProcessMixin, Process):
                 exception=str(exception), traceback=traceback.format_exc()
             )
 
-        # Parse & attach outputs
+        return self.parse(results)
+
+    def parse(self, results: t.Optional[dict] = None) -> ExitCode:
+        """Parse and attach outputs, or short-circuit with a provided ExitCode."""
+        # Short-circuit: Waiting handed us a pre-built ExitCode
+        if isinstance(results, dict) and "__exit_code__" in results:
+            return results["__exit_code__"]
+
         outputs_spec = SocketSpec.from_dict(self.node.base.attributes.get(ATTR_OUTPUTS_SPEC) or {})
         serializers = self.node.base.attributes.get(ATTR_SERIALIZERS, {})
+
         outputs, exit_code = parse_outputs(
             results,
             output_spec=outputs_spec,
