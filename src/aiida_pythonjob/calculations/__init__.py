@@ -1,4 +1,4 @@
-from .pyfunction import PyFunction
+from .pyfunction import MonitorPyFunction, PyFunction
 from .pythonjob import PythonJob
 
-__all__ = ("PyFunction", "PythonJob")
+__all__ = ("MonitorPyFunction", "PyFunction", "PythonJob")

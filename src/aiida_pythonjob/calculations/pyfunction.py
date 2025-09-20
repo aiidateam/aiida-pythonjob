@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import traceback
 import typing as t
 
@@ -10,7 +11,8 @@ import plumpy
 from aiida.common.lang import override
 from aiida.engine import Process, ProcessSpec, ProcessState
 from aiida.engine.processes.exit_code import ExitCode
-from aiida.orm import CalcFunctionNode
+from aiida.orm import CalcFunctionNode, Float
+from aiida.orm.nodes.data.base import to_aiida_type
 from node_graph.socket_spec import SocketSpec
 
 from aiida_pythonjob.calculations.common import (
@@ -23,7 +25,7 @@ from aiida_pythonjob.calculations.common import (
 from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
 from aiida_pythonjob.parsers.utils import parse_outputs
 
-from .tasks import Waiting
+from .tasks import MonitorWaiting, Waiting
 
 __all__ = ("PyFunction",)
 
@@ -32,6 +34,7 @@ class PyFunction(FunctionProcessMixin, Process):
     _node_class = CalcFunctionNode
     label_template = "{name}"
     default_name = "anonymous_function"
+    _WAITING = Waiting
 
     def __init__(self, *args, **kwargs) -> None:
         if kwargs.get("enable_persistence", False):
@@ -79,7 +82,7 @@ class PyFunction(FunctionProcessMixin, Process):
     @classmethod
     def get_state_classes(cls) -> t.Dict[t.Hashable, t.Type[plumpy.process_states.State]]:
         states_map = super().get_state_classes()
-        states_map[ProcessState.WAITING] = Waiting
+        states_map[ProcessState.WAITING] = cls._WAITING
         return states_map
 
     @override
@@ -96,8 +99,6 @@ class PyFunction(FunctionProcessMixin, Process):
 
     @override
     async def run(self) -> t.Union[plumpy.process_states.Stop, int, plumpy.process_states.Wait]:
-        import asyncio
-
         if self.node.exit_status is not None:
             return ExitCode(self.node.exit_status, self.node.exit_message)
 
@@ -148,3 +149,43 @@ class PyFunction(FunctionProcessMixin, Process):
         for name, value in (outputs or {}).items():
             self.out(name, value)
         return ExitCode()
+
+
+class MonitorPyFunction(PyFunction):
+    """A version of PyFunction that can be monitored."""
+
+    default_name = "monitor_function"
+    _WAITING = MonitorWaiting
+
+    @classmethod
+    def define(cls, spec: ProcessSpec) -> None:  # type: ignore[override]
+        """Define inputs/outputs and exit codes."""
+        super().define(spec)
+        spec.input(
+            "interval",
+            valid_type=Float,
+            default=lambda: Float(5.0),
+            serializer=to_aiida_type,
+            help="Polling interval in seconds.",
+        )
+        spec.input(
+            "timeout",
+            valid_type=Float,
+            default=lambda: Float(3600.0),
+            serializer=to_aiida_type,
+            help="Timeout in seconds.",
+        )
+
+        spec.exit_code(
+            324,
+            "ERROR_TIMEOUT",
+            invalidates_cache=True,
+            message="Monitor function execution timed out.\n{exception}\n{traceback}",
+        )
+
+    @override
+    async def run(self) -> t.Union[plumpy.process_states.Stop, int, plumpy.process_states.Wait]:
+        if self.node.exit_status is not None:
+            return ExitCode(self.node.exit_status, self.node.exit_message)
+
+        return plumpy.process_states.Wait(msg="Waiting to run")

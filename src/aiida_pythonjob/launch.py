@@ -260,3 +260,39 @@ def prepare_pyfunction_inputs(
     if process_label:
         inputs["process_label"] = process_label
     return inputs
+
+
+def prepare_monitor_function_inputs(
+    function: Optional[Callable[..., Any]] = None,
+    function_inputs: Optional[Dict[str, Any]] = None,
+    inputs_spec: Optional[type] = None,
+    outputs_spec: Optional[type] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+    process_label: Optional[str] = None,
+    function_data: dict | None = None,
+    deserializers: dict | None = None,
+    serializers: dict | None = None,
+    register_pickle_by_value: bool = False,
+    interval: Optional[Union[int, float, orm.Float, orm.Int]] = None,
+    timeout: Optional[Union[int, float, orm.Float, orm.Int]] = None,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """
+    Prepare the inputs for a monitor function (no Code/upload_files).
+    """
+    inputs = prepare_pyfunction_inputs(
+        function=function,
+        function_inputs=function_inputs,
+        inputs_spec=inputs_spec,
+        outputs_spec=outputs_spec,
+        metadata=metadata,
+        process_label=process_label,
+        function_data=function_data,
+        deserializers=deserializers,
+        serializers=serializers,
+        register_pickle_by_value=register_pickle_by_value,
+        **kwargs,
+    )
+    inputs["interval"] = orm.Float(interval) if interval is not None else orm.Float(10.0)
+    inputs["timeout"] = orm.Float(timeout) if timeout is not None else orm.Float(3600.0)
+    return inputs
