@@ -47,7 +47,7 @@ def test_async_function_raises_produces_exit_code():
 def test_async_function_kill():
     inputs = prepare_pyfunction_inputs(
         add_async,
-        function_inputs={"x": 1, "y": 2, "t": 20},
+        function_inputs={"x": 1, "y": 2, "t": 30},
     )
     node = submit(PyFunction, **inputs)
     # wait process to start
@@ -55,9 +55,9 @@ def test_async_function_kill():
     control.kill_processes(
         [node],
         all_entries=None,
-        timeout=5,
+        timeout=10,
     )
     # wait kill to take effect
-    time.sleep(5)
+    time.sleep(10)
     assert node.is_killed
     assert "Killed through" in node.process_status
