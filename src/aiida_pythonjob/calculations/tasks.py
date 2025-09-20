@@ -72,10 +72,9 @@ class Waiting(plumpy.process_states.Waiting):
             payload = await self._launch_task(task_run_job, self.process)
 
             # Convert structured payloads into the next state or an ExitCode
-            if isinstance(payload, dict) and payload.get("__ok__"):
+            if payload.get("__ok__"):
                 return self.parse(payload["results"])
-
-            if isinstance(payload, dict) and payload.get("__error__"):
+            elif payload.get("__error__"):
                 err = payload["__error__"]
                 if err == "ERROR_DESERIALIZE_INPUTS_FAILED":
                     exit_code = self.process.exit_codes.ERROR_DESERIALIZE_INPUTS_FAILED.format(
@@ -90,14 +89,6 @@ class Waiting(plumpy.process_states.Waiting):
                 # Jump straight to FINISHED by scheduling parse with the error ExitCode
                 # We reuse the Running->parse path so the process finishes uniformly.
                 return self.create_state(ProcessState.RUNNING, self.process.parse, {"__exit_code__": exit_code})
-
-            # Unexpected shape: fail safely
-            exit_code = self.process.exit_codes.ERROR_FUNCTION_EXECUTION_FAILED.format(
-                exception="Unknown return payload from task_run_job",
-                traceback=str(payload),
-            )
-            return self.create_state(ProcessState.RUNNING, self.process.parse, {"__exit_code__": exit_code})
-
         except plumpy.process_states.KillInterruption as exception:
             node.set_process_status(str(exception))
             raise

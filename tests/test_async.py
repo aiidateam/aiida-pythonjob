@@ -1,13 +1,16 @@
 import asyncio
+import time
 
-from aiida.engine import run_get_node
+import pytest
+from aiida.engine import run_get_node, submit
+from aiida.engine.processes import control
 
 from aiida_pythonjob import PyFunction, prepare_pyfunction_inputs, pyfunction
 
 
 @pyfunction()
-async def add_async(x, y):
-    await asyncio.sleep(0.01)
+async def add_async(x, y, t=0.01):
+    await asyncio.sleep(t)
     return x + y
 
 
@@ -38,3 +41,23 @@ def test_async_function_raises_produces_exit_code():
     assert node.exit_status == PyFunction.exit_codes.ERROR_FUNCTION_EXECUTION_FAILED.status
     assert "Function execution failed." in node.exit_message
     assert "bad x: 99" in node.exit_message
+
+
+@pytest.mark.usefixtures("started_daemon_client")
+def test_async_function_kill():
+    inputs = prepare_pyfunction_inputs(
+        add_async,
+        function_inputs={"x": 1, "y": 2, "t": 20},
+    )
+    node = submit(PyFunction, **inputs)
+    # wait process to start
+    time.sleep(2)
+    control.kill_processes(
+        [node],
+        all_entries=None,
+        timeout=5,
+    )
+    # wait kill to take effect
+    time.sleep(5)
+    assert node.is_killed
+    assert "Killed through" in node.process_status
