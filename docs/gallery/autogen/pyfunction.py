@@ -93,7 +93,7 @@ for key, value in result.items():
 
 from aiida.engine import submit
 import datetime
-from aiida_pythonjob import prepare_pyfunction_inputs
+from aiida_pythonjob import prepare_pyfunction_inputs, PyFunction
 
 
 @pyfunction()
@@ -111,34 +111,11 @@ inputs = prepare_pyfunction_inputs(
     function_inputs={"x": 2, "y": 3, "time": 2.0},
 )
 
-node = submit(add_async, **inputs)
-
-# %%
-# Here is an example to monitor external events or conditions without blocking.
-# Here is an example that waits until a specified time.
-#
-
-
-@pyfunction()
-async def monitor_time(time: datetime.datetime):
-    import asyncio
-
-    # monitor until the specified time
-    while datetime.datetime.now() < time:
-        print("Waiting...")
-        await asyncio.sleep(0.5)
-
-
-inputs = prepare_pyfunction_inputs(
-    monitor_time,
-    function_inputs={"time": datetime.datetime.now() + datetime.timedelta(seconds=5)},
-)
-
-node = submit(monitor_time, **inputs)
+node = submit(PyFunction, **inputs)
 
 # %%#
 # Killing an async process
-# ------------------------
+# ~~~~~~~~~~~~~~~~~~~~~~~~
 # Since async functions run as regular AiiDA processes, they can be controlled and killed
 # programmatically. This is useful for managing long-running or stuck tasks.
 # You can kill a running async function using the AiiDA command line interface.
@@ -147,3 +124,49 @@ node = submit(monitor_time, **inputs)
 #
 #    $ verdi process kill <pk>
 #
+# Monitor external events
+# ------------------------
+#
+# Async functions are particularly useful for monitoring external events or conditions without blocking the AiiDA daemon.
+# Here is an example that waits until a specified time.
+#
+
+
+async def monitor_time(time: datetime.datetime, interval: float = 0.5, timeout: float = 60.0):
+    """Monitor the current time until it reaches the specified target time."""
+    import asyncio
+
+    start_time = datetime.datetime.now()
+    while datetime.datetime.now() < time:
+        print("Waiting...")
+        await asyncio.sleep(interval)
+        if (datetime.datetime.now() - start_time).total_seconds() > timeout:
+            raise TimeoutError("Monitoring timed out.")
+
+
+inputs = prepare_pyfunction_inputs(
+    monitor_time,
+    function_inputs={"time": datetime.datetime.now() + datetime.timedelta(seconds=5), "interval": 1.0},
+)
+
+node = submit(PyFunction, **inputs)
+# %%
+# For user's convenience, we provide a dedicated ``MonitorFunction`` class that inherits from ``PyFunction``.
+# User only need to write normal function, which returns True when the monitoring condition is met.
+
+from aiida_pythonjob import MonitorPyFunction
+
+
+def monitor_time(time: datetime.datetime):
+    # return True when the current time is greater than the target time
+    return datetime.datetime.now() > time
+
+
+inputs = prepare_pyfunction_inputs(
+    monitor_time,
+    function_inputs={"time": datetime.datetime.now() + datetime.timedelta(seconds=5)},
+    interval=1.0,
+    timeout=20.0,
+)
+
+node = submit(MonitorPyFunction, **inputs)

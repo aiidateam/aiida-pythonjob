@@ -4,15 +4,17 @@ __version__ = "0.4.2"
 
 from node_graph import socket_spec as spec
 
-from .calculations import PyFunction, PythonJob
+from .calculations import MonitorPyFunction, PyFunction, PythonJob
 from .decorator import pyfunction
-from .launch import prepare_pyfunction_inputs, prepare_pythonjob_inputs
+from .launch import prepare_monitor_function_inputs, prepare_pyfunction_inputs, prepare_pythonjob_inputs
 from .parsers import PythonJobParser
 
 __all__ = (
+    "MonitorPyFunction",
     "PyFunction",
     "PythonJob",
     "PythonJobParser",
+    "prepare_monitor_function_inputs",
     "prepare_pyfunction_inputs",
     "prepare_pythonjob_inputs",
     "pyfunction",
