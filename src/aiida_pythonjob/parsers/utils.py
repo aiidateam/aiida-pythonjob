@@ -124,4 +124,8 @@ def parse_outputs(
         ((only_name, only_spec),) = fields.items()
         return {only_name: serialize_ports(results, only_spec, serializers=serializers)}, None
 
+    # empty output spec + None result
+    if len(fields) == 0 and results is None:
+        return {}, None
+
     return None, exit_codes.ERROR_RESULT_OUTPUT_MISMATCH

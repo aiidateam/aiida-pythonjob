@@ -78,3 +78,72 @@ result, node = run_get_node(generate_structures, element="Al", factors=[0.95, 1.
 print("Generated scaled structures:")
 for key, value in result.items():
     print(key, value)
+
+
+# %%
+# Async functions
+# ---------------
+# ``pyfunction`` also supports Python's ``async`` functions. This is a powerful feature for
+# tasks that are I/O-bound (e.g., waiting for network requests, file operations) or for
+# running multiple tasks concurrently without blocking the AiiDA daemon.
+#
+# When you ``submit`` an async function, the call returns immediately with a process node,
+# allowing your script to continue running while the function executes in the background.
+#
+
+from aiida.engine import submit
+import datetime
+from aiida_pythonjob import prepare_pyfunction_inputs
+
+
+@pyfunction()
+async def add_async(x, y, time: float):
+    """A simple function that adds two numbers."""
+    import asyncio
+
+    # Simulate asynchronous I/O or computation
+    await asyncio.sleep(time)
+    return x + y
+
+
+inputs = prepare_pyfunction_inputs(
+    add_async,
+    function_inputs={"x": 2, "y": 3, "time": 2.0},
+)
+
+node = submit(add_async, **inputs)
+
+# %%
+# Here is an example to monitor external events or conditions without blocking.
+# Here is an example that waits until a specified time.
+#
+
+
+@pyfunction()
+async def monitor_time(time: datetime.datetime):
+    import asyncio
+
+    # monitor until the specified time
+    while datetime.datetime.now() < time:
+        print("Waiting...")
+        await asyncio.sleep(0.5)
+
+
+inputs = prepare_pyfunction_inputs(
+    monitor_time,
+    function_inputs={"time": datetime.datetime.now() + datetime.timedelta(seconds=5)},
+)
+
+node = submit(monitor_time, **inputs)
+
+# %%#
+# Killing an async process
+# ------------------------
+# Since async functions run as regular AiiDA processes, they can be controlled and killed
+# programmatically. This is useful for managing long-running or stuck tasks.
+# You can kill a running async function using the AiiDA command line interface.
+#
+# .. code-block:: bash
+#
+#    $ verdi process kill <pk>
+#

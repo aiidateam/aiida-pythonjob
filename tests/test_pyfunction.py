@@ -20,6 +20,16 @@ def test_function_default_outputs(fixture_localhost):
     assert node.process_label == "add"
 
 
+def test_function_none_outputs(fixture_localhost):
+    @pyfunction()
+    def add(x, y):
+        """Does not return anything."""
+
+    result, node = run_get_node(add, x=1, y=2)
+    assert result == {}
+    assert node.is_finished_ok
+
+
 def test_prepare_pyfunction_inputs():
     """Test prepare_pyfunction_inputs utility function."""
     inputs = prepare_pyfunction_inputs(

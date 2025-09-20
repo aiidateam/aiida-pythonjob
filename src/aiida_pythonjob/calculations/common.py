@@ -47,7 +47,7 @@ def add_common_function_io(spec) -> None:
         320,
         "ERROR_DESERIALIZE_INPUTS_FAILED",
         invalidates_cache=True,
-        message="Failed to unpickle inputs.\n{exception}\n{traceback}",
+        message="Failed to deserialize inputs.\n{exception}\n{traceback}",
     )
     spec.exit_code(
         321,
