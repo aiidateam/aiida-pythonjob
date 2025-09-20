@@ -16,7 +16,6 @@ def test_async_function_runs_and_returns_result():
     )
     result, node = run_get_node(MonitorPyFunction, **inputs)
     assert node.is_finished_ok
-    assert "result" in result
     # The actual monitor function returns None
     assert result["result"].value is None
 
