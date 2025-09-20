@@ -91,8 +91,7 @@ for key, value in result.items():
 # allowing your script to continue running while the function executes in the background.
 #
 
-import asyncio
-from aiida.engine import run, submit
+from aiida.engine import submit
 import datetime
 from aiida_pythonjob import prepare_pyfunction_inputs
 
@@ -122,6 +121,8 @@ node = submit(add_async, **inputs)
 
 @pyfunction()
 async def monitor_time(time: datetime.datetime):
+    import asyncio
+
     # monitor until the specified time
     while datetime.datetime.now() < time:
         print("Waiting...")

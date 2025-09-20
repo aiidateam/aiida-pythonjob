@@ -65,3 +65,28 @@ def test_deserializer():
         },
     )
     assert data == {"array|data": [3]}
+
+
+def test_none_data():
+    from aiida_pythonjob.data.common_data import NoneData
+
+    none_data = NoneData()
+    assert none_data.value is None
+    assert none_data.obj is None
+    assert repr(none_data) == "NoneData()"
+    assert str(none_data) == "NoneData()"
+
+
+def test_datetime_data():
+    import datetime
+
+    from aiida_pythonjob.data.common_data import DateTimeData
+
+    dt = datetime.datetime(2024, 6, 1, 12, 0, 0)
+    dt_data = DateTimeData(dt)
+    assert dt_data.value == dt
+    assert str(dt_data) == "2024-06-01 12:00:00"
+    assert isinstance(dt_data.value, datetime.datetime)
+
+    with pytest.raises(TypeError, match="Expected datetime.datetime"):
+        DateTimeData("2024-06-01")

@@ -51,7 +51,7 @@ def test_async_function_kill():
     )
     node = submit(PyFunction, **inputs)
     # wait process to start
-    time.sleep(2)
+    time.sleep(5)
     control.kill_processes(
         [node],
         all_entries=None,
