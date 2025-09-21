@@ -1,6 +1,6 @@
 import pytest
 from aiida import orm
-from aiida.engine import run_get_node
+from aiida.engine import run_get_node, run_get_pk
 from node_graph import socket_spec as spec
 
 from aiida_pythonjob import PyFunction, prepare_pyfunction_inputs, pyfunction
@@ -18,6 +18,15 @@ def test_function_default_outputs(fixture_localhost):
 
     assert result.value == 3
     assert node.process_label == "add"
+
+
+def test_run_get_pk(fixture_localhost):
+    """Test decorator."""
+
+    result, pk = run_get_pk(add, x=1, y=2)
+
+    assert result.value == 3
+    assert isinstance(pk, int)
 
 
 def test_function_none_outputs(fixture_localhost):

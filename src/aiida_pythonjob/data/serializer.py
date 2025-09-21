@@ -85,13 +85,6 @@ def serialize_to_aiida_nodes(inputs: dict, serializers: dict | None = None) -> d
     return new_inputs
 
 
-def clean_dict_key(data):
-    """Replace "." with "__dot__" in the keys of a dictionary."""
-    if isinstance(data, dict):
-        return {k.replace(".", "__dot__"): clean_dict_key(v) for k, v in data.items()}
-    return data
-
-
 def general_serializer(
     data: Any,
     serializers: dict | None = None,
