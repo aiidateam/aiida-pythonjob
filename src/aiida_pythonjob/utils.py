@@ -18,7 +18,6 @@ from aiida.common.exceptions import NotExistent
 from aiida.orm import Computer, InstalledCode, Str, User, load_code, load_computer
 from node_graph.socket_spec import SocketSpec
 
-from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
 from aiida_pythonjob.data.serializer import general_serializer
 
 
@@ -326,49 +325,3 @@ def serialize_ports(
 
     # Leaf
     return general_serializer(python_data, serializers=serializers, store=False)
-
-
-def deserialize_ports(
-    serialized_data: Any,
-    port_schema: SocketSpec | Dict[str, Any],
-    deserializers: Optional[Dict[str, str]] = None,
-) -> Any:
-    """Deserialize AiiDA Data to raw Python following a SocketSpec schema.
-
-    Respects ``var_kwargs`` by accepting arbitrary keys and using ``item`` if set,
-    otherwise treating items as ANY.
-    """
-    spec = _ensure_spec(port_schema)
-
-    # Namespace
-    if spec.is_namespace():
-        name = getattr(spec.meta, "help", None) or "<namespace>"
-        if not isinstance(serialized_data, dict):
-            raise ValueError(f"Expected dict for namespace '{name}', got {type(serialized_data)}")
-
-        out: Dict[str, Any] = {}
-        fields = spec.fields or {}
-        is_dyn = bool(spec.dynamic)
-        item_spec = spec.item if is_dyn else None
-        allow_extra = _has_var_kwargs(spec)
-        catch_schema = item_spec or SocketSpec(identifier="node_graph.any")
-
-        for key, value in serialized_data.items():
-            if key in fields:
-                child_spec = fields[key]
-                if child_spec.is_namespace():
-                    out[key] = deserialize_ports(value, child_spec, deserializers=deserializers)
-                else:
-                    out[key] = deserialize_to_raw_python_data(value, deserializers=deserializers)
-            elif (is_dyn and item_spec is not None) or allow_extra:
-                schema = item_spec if (is_dyn and item_spec is not None) else catch_schema
-                if schema.is_namespace():
-                    out[key] = deserialize_ports(value, schema, deserializers=deserializers)
-                else:
-                    out[key] = deserialize_to_raw_python_data(value, deserializers=deserializers)
-            else:
-                raise ValueError(f"Unexpected key '{key}' for namespace '{name}' (not dynamic).")
-        return out
-
-    # Leaf
-    return deserialize_to_raw_python_data(serialized_data, deserializers=deserializers)
