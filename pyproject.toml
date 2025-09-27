@@ -65,7 +65,7 @@ Source = "https://github.com/aiidateam/aiida-pythonjob"
 "pythonjob.numpy.float64" = "aiida.orm.nodes.data.float:Float"
 "pythonjob.numpy.int64" = "aiida.orm.nodes.data.int:Int"
 "pythonjob.numpy.bool_" = "aiida.orm.nodes.data.bool:Bool"
-"pythonjob.numpy.ndarray" = "aiida.orm.nodes.data.array.array.ArrayData"
+"pythonjob.numpy.ndarray" = "aiida.orm.nodes.data.array.array:ArrayData"
 
 [project.entry-points."aiida.calculations"]
 "pythonjob.pythonjob" = "aiida_pythonjob.calculations.pythonjob:PythonJob"
