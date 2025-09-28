@@ -157,10 +157,6 @@ class PythonJob(FunctionProcessMixin, CalcJob):
         if "source_code" in self.inputs.function_data:
             self.node.base.attributes.set(self._SOURCE_CODE_KEY, self.inputs.function_data.source_code)
 
-    def on_create(self) -> None:
-        super().on_create()
-        self.node.label = self._build_process_label()
-
     def _gather_parent_transfers(self) -> tuple[list[tuple], list[tuple]]:
         """Build remote/local copy lists for the optional ``parent_folder``.
 
