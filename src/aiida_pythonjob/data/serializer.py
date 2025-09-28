@@ -11,6 +11,20 @@ from aiida_pythonjob.data.jsonable_data import JsonableData
 
 from .utils import import_from_path
 
+builtin_serializers = {
+    "builtins.int": "aiida.orm.nodes.data.int.Int",
+    "builtins.float": "aiida.orm.nodes.data.float.Float",
+    "builtins.str": "aiida.orm.nodes.data.str.Str",
+    "builtins.bool": "aiida.orm.nodes.data.bool.Bool",
+    "builtins.list": "aiida.orm.nodes.data.list.List",
+    "builtins.dict": "aiida.orm.nodes.data.dict.Dict",
+    "numpy.float32": "aiida.orm.nodes.data.float.Float",
+    "numpy.float64": "aiida.orm.nodes.data.float.Float",
+    "numpy.int64": "aiida.orm.nodes.data.int.Int",
+    "numpy.bool_": "aiida.orm.nodes.data.bool.Bool",
+    "numpy.ndarray": "aiida.orm.nodes.data.array.array.ArrayData",
+}
+
 
 def atoms_to_structure_data(structure):
     return orm.StructureData(ase=structure)
@@ -51,7 +65,7 @@ def get_serializers() -> dict:
     # import time
 
     # ts = time.time()
-    all_serializers = {}
+    all_serializers = builtin_serializers.copy()
     custom_serializers = config.get("serializers", {})
     eps = get_serializers_from_entry_points()
     # check if there are duplicates
