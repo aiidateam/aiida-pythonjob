@@ -26,6 +26,7 @@ def create_mock_entry_points(entry_point_list):
 def test_get_serializers(mock_entry_points):
     # Mock the configuration
     from aiida_pythonjob.config import config
+    from aiida_pythonjob.data.serializer import builtin_serializers
 
     config["serializers"] = {}
     # Mock entry points
@@ -47,6 +48,7 @@ def test_get_serializers(mock_entry_points):
     }
     result = get_serializers()
     # Assert results
-    expected = {"abc.Abc": "xyz.abc.AbcData", "abc.Bcd": "xyz.abc.BcdData", "abc.Cde": "another_xyz.abc.CdeData"}
+    expected = builtin_serializers.copy()
+    expected.update({"abc.Abc": "xyz.abc.AbcData", "abc.Bcd": "xyz.abc.BcdData", "abc.Cde": "another_xyz.abc.CdeData"})
     print("result", result)
     assert result == expected
