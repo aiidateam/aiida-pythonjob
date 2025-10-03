@@ -22,8 +22,8 @@ def _unwrap_callable(func: Any) -> Callable[..., Any] | None:
     """
     if func is None:
         return None
-    if isinstance(func, BaseHandle) and hasattr(func, "_func"):
-        return func._func
+    if isinstance(func, BaseHandle) and hasattr(func, "_callable"):
+        return func._callable
     if getattr(func, "is_process_function", False):
         # aiida process_function wrapper (e.g., calcfunction/workfunction)
         return func.func
