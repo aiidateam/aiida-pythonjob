@@ -44,8 +44,7 @@ def parse_outputs(
     spec = _ensure_spec(output_spec)
 
     fields = spec.fields or {}
-    is_dyn = bool(spec.dynamic)
-    item_spec = spec.item if is_dyn else None
+    is_dyn = spec.meta.dynamic
 
     if already_serialized(results):
         return {"result": results}, None
@@ -105,14 +104,13 @@ def parse_outputs(
                     return None, exit_codes.ERROR_MISSING_OUTPUT
         # dynamic items
         if is_dyn:
-            if item_spec is None:
-                logger.warning("Outputs marked dynamic but missing 'item' schema; treating as ANY.")
-            for name, value in remaining.items():
-                outs[name] = serialize_ports(
-                    value,
-                    item_spec or SocketSpec(identifier="node_graph.any"),
+            outs.update(
+                serialize_ports(
+                    remaining,
+                    spec or SocketSpec(identifier="node_graph.any"),
                     serializers=serializers,
                 )
+            )
             return outs, None
         # not dynamic -> leftovers are unexpected (warn but continue)
         if remaining:

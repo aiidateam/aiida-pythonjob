@@ -16,6 +16,7 @@ from typing import (
 
 from aiida.common.exceptions import NotExistent
 from aiida.orm import Computer, InstalledCode, Str, User, load_code, load_computer
+from node_graph.socket_meta import SocketMeta
 from node_graph.socket_spec import SocketSpec
 
 from aiida_pythonjob.data.serializer import general_serializer
@@ -298,10 +299,6 @@ def serialize_ports(
 
         out: Dict[str, Any] = {}
         fields = spec.fields or {}
-        is_dyn = bool(spec.dynamic)
-        item_spec = spec.item if is_dyn else None
-        allow_extra = _has_var_kwargs(spec)
-        catch_schema = item_spec or SocketSpec(identifier="node_graph.any")
 
         for key, value in python_data.items():
             if key in fields:
@@ -313,10 +310,15 @@ def serialize_ports(
                     out[key] = serialize_ports(value, child_spec, serializers=serializers)
                 else:
                     out[key] = general_serializer(value, serializers=serializers, store=False)
-            elif (is_dyn and item_spec is not None) or allow_extra:
-                schema = item_spec if (is_dyn and item_spec is not None) else catch_schema
-                if schema.is_namespace():
-                    out[key] = serialize_ports(value, schema, serializers=serializers)
+            elif spec.meta.dynamic:
+                if spec.item is None:
+                    if isinstance(value, dict):
+                        item = SocketSpec(identifier="node_graph.namespace", meta=SocketMeta(dynamic=True))
+                        out[key] = serialize_ports(value, item, serializers=serializers)
+                    else:
+                        out[key] = general_serializer(value, serializers=serializers, store=False)
+                elif spec.item.is_namespace():
+                    out[key] = serialize_ports(value, spec.item, serializers=serializers)
                 else:
                     out[key] = general_serializer(value, serializers=serializers, store=False)
             else:

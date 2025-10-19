@@ -258,7 +258,7 @@ def test_top_level_outputs_dynamic():
 def test_dynamic_rows():
     """Test function with dynamic rows."""
 
-    row = spec.namespace(sum=any, product=any)
+    row = spec.namespace(sum=any, product=spec.dynamic())
 
     @pyfunction(outputs=spec.dynamic(row, sum=int))
     def test_dynamic_rows(data: spec.dynamic(row, sum=int)):
@@ -267,9 +267,9 @@ def test_dynamic_rows():
     result, node = run_get_node(
         test_dynamic_rows,
         data={
-            "data_0": {"sum": 0, "product": 0},
-            "data_1": {"sum": 1, "product": 2},
-            "data_2": {"sum": 2, "product": 4},
+            "data_0": {"sum": 0, "product": {"a": 0}},
+            "data_1": {"sum": 1, "product": {"a": 2, "b": {"c": 3}}},
+            "data_2": {"sum": 2, "product": {"a": 4}},
             "sum": 1,
         },
     )
@@ -277,9 +277,13 @@ def test_dynamic_rows():
     # inputs should be serialized as dynamic rows
     assert node.inputs.function_inputs.data.sum.value == 1
     assert node.inputs.function_inputs.data.data_0.sum.value == 0
+    assert node.inputs.function_inputs.data.data_1.product.a.value == 2
+    assert node.inputs.function_inputs.data.data_1.product.b.c.value == 3
     # outputs should be serialized as dynamic rows
     assert node.outputs.sum.value == 1
     assert node.outputs.data_0.sum.value == 0
+    assert node.outputs.data_1.product.a.value == 2
+    assert node.outputs.data_1.product.b.c.value == 3
 
 
 def test_only_data_with_value():

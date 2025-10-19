@@ -10,7 +10,7 @@ import pytest
 from aiida import orm
 from aiida.cmdline.utils.common import get_workchain_report
 from aiida.common.links import LinkType
-from node_graph.socket_spec import namespace
+from node_graph.socket_spec import dynamic, namespace
 
 from aiida_pythonjob.data.deserializer import all_deserializers
 from aiida_pythonjob.data.serializer import all_serializers
@@ -134,6 +134,27 @@ def test_no_output_file(fixture_localhost):
     parser = create_parser(result, spec_data, output_filename="not_results.pickle")
     exit_code = parser.parse()
     assert exit_code == parser.exit_codes.ERROR_READING_OUTPUT_FILE
+
+
+def test_dynamic_spec(fixture_localhost):
+    # Test with dynamic spec without item
+    result = {"a": 1, "b": 2, "nested": {"c": 3}}
+    spec_data = {"outputs_spec": dynamic().to_dict()}
+    parser = create_parser(result, spec_data)
+    exit_code = parser.parse()
+    assert exit_code is None
+    assert parser.outputs["a"] == 1
+    assert parser.outputs["b"] == 2
+    assert isinstance(parser.outputs["nested"], dict)
+    assert parser.outputs["nested"]["c"] == 3
+    # Test with dynamic spec with Any item
+    spec_data = {"outputs_spec": dynamic(Any).to_dict()}
+    parser = create_parser(result, spec_data)
+    exit_code = parser.parse()
+    assert exit_code is None
+    assert parser.outputs["a"] == 1
+    assert parser.outputs["b"] == 2
+    assert isinstance(parser.outputs["nested"], orm.Dict)
 
 
 @pytest.mark.parametrize(
