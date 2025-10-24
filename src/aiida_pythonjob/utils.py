@@ -283,6 +283,7 @@ def serialize_ports(
     python_data: Any,
     port_schema: SocketSpec | Dict[str, Any],
     serializers: Optional[Dict[str, str]] = None,
+    user: Optional[User] = None,
 ) -> Any:
     """Serialize raw Python data to AiiDA Data following a SocketSpec schema.
 
@@ -309,21 +310,21 @@ def serialize_ports(
                 elif child_spec.is_namespace():
                     out[key] = serialize_ports(value, child_spec, serializers=serializers)
                 else:
-                    out[key] = general_serializer(value, serializers=serializers, store=False)
+                    out[key] = general_serializer(value, serializers=serializers, store=False, user=user)
             elif spec.meta.dynamic:
                 if spec.item is None:
                     if isinstance(value, dict):
                         item = SocketSpec(identifier="node_graph.namespace", meta=SocketMeta(dynamic=True))
                         out[key] = serialize_ports(value, item, serializers=serializers)
                     else:
-                        out[key] = general_serializer(value, serializers=serializers, store=False)
+                        out[key] = general_serializer(value, serializers=serializers, store=False, user=user)
                 elif spec.item.is_namespace():
                     out[key] = serialize_ports(value, spec.item, serializers=serializers)
                 else:
-                    out[key] = general_serializer(value, serializers=serializers, store=False)
+                    out[key] = general_serializer(value, serializers=serializers, store=False, user=user)
             else:
                 raise ValueError(f"Unexpected key '{key}' for namespace '{name}' (not dynamic).")
         return out
 
     # Leaf
-    return general_serializer(python_data, serializers=serializers, store=False)
+    return general_serializer(python_data, serializers=serializers, store=False, user=user)

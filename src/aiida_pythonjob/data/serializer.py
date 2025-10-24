@@ -103,6 +103,7 @@ def general_serializer(
     data: Any,
     serializers: dict | None = None,
     store: bool = True,
+    user: orm.User | None = None,
 ) -> orm.Node:
     """
     Attempt to serialize the data to an AiiDA data node based on the preference from `config`:
@@ -123,7 +124,7 @@ def general_serializer(
     if ep_key in serializers:
         try:
             serializer = import_from_path(serializers[ep_key])
-            new_node = serializer(data)
+            new_node = serializer(data, user=user)
             if store:
                 new_node.store()
             return new_node
@@ -132,7 +133,7 @@ def general_serializer(
             raise ValueError(f"Error in serializing {ep_key}: {error_traceback}")
 
     try:
-        node = JsonableData(data)
+        node = JsonableData(data, user=user)
         if store:
             node.store()
         return node

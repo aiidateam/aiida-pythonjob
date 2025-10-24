@@ -64,19 +64,20 @@ class JsonableData(orm.Data):
             f"Object `{obj}` does not have any of the following dictionary-conversion methods: {self._DICT_METHODS}"
         )
 
-    def _make_jsonable(self, data: typing.Any) -> typing.Any:
+    @classmethod
+    def _make_jsonable(cls, data: typing.Any) -> typing.Any:
         """
         Recursively walk `data`. Convert anything that is not JSON-serializable
         into JSON-friendly structures (e.g. convert NumPy arrays to lists).
         """
         if isinstance(data, dict):
-            return {k: self._make_jsonable(v) for k, v in data.items()}
+            return {k: cls._make_jsonable(v) for k, v in data.items()}
 
         elif isinstance(data, list):
-            return [self._make_jsonable(v) for v in data]
+            return [cls._make_jsonable(v) for v in data]
 
         elif isinstance(data, tuple):
-            return tuple(self._make_jsonable(v) for v in data)
+            return tuple(cls._make_jsonable(v) for v in data)
 
         elif isinstance(data, np.ndarray):
             return data.tolist()
