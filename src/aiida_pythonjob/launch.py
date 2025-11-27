@@ -6,8 +6,8 @@ import types
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 from aiida import orm
-from node_graph.node_spec import BaseHandle
 from node_graph.socket_spec import infer_specs_from_callable
+from node_graph.task_spec import BaseHandle
 
 from aiida_pythonjob.data.deserializer import all_deserializers
 from aiida_pythonjob.data.serializer import all_serializers
