@@ -58,3 +58,48 @@ def test_serialize_json():
 
     serialized_data = general_serializer(data, serializers=all_serializers)
     assert isinstance(serialized_data, JsonableData)
+
+
+def test_serialize_ase_atoms():
+    from ase import Atoms
+
+    from aiida_pythonjob.data.atoms import AtomsData
+    from aiida_pythonjob.data.serializer import general_serializer
+
+    data = Atoms("C")
+    serialized_data = general_serializer(data, serializers=all_serializers)
+    assert isinstance(serialized_data, AtomsData)
+
+
+def test_serialize_ase_traj():
+    from ase import Atoms
+
+    from aiida_pythonjob.data.atoms import Trajectory
+    from aiida_pythonjob.data.serializer import general_serializer
+
+    data = Trajectory([Atoms("C"), Atoms("C")])
+    serialized_data = general_serializer(data, serializers=all_serializers)
+    assert isinstance(serialized_data, Trajectory)
+
+
+def test_deserialize_atoms():
+    from ase import Atoms
+
+    from aiida_pythonjob.data.atoms import AtomsData
+    from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
+
+    data = AtomsData(Atoms("C"))
+    deserialized_data = deserialize_to_raw_python_data(data)
+    assert isinstance(deserialized_data, Atoms)
+
+
+def test_deserialize_trajectory():
+    from ase import Atoms
+
+    from aiida_pythonjob.data.atoms import Trajectory
+    from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
+
+    data = Trajectory([Atoms("C"), Atoms("C")])
+    deserialized_data = deserialize_to_raw_python_data(data)
+    assert isinstance(deserialized_data, list)
+    assert all(isinstance(struct, Atoms) for struct in deserialized_data)

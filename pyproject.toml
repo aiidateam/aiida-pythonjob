@@ -53,6 +53,7 @@ Source = "https://github.com/aiidateam/aiida-pythonjob"
 [project.entry-points."aiida.data"]
 "pythonjob.jsonable_data" = "aiida_pythonjob.data.jsonable_data:JsonableData"
 "pythonjob.ase.atoms.Atoms" = "aiida_pythonjob.data.atoms:AtomsData"
+"pythonjob.ase.atoms.Trajectory" = "aiida_pythonjob.data.atoms:Trajectory"
 "pythonjob.builtins.NoneType" = "aiida_pythonjob.data.common_data:NoneData"
 "pythonjob.datetime.datetime" = "aiida_pythonjob.data.common_data:DateTimeData"
 
