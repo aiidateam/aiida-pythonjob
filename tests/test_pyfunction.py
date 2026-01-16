@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 from aiida import orm
 from aiida.engine import run_get_node, run_get_pk
@@ -76,8 +78,8 @@ def test_function_custom_outputs():
 
 def test_function_custom_inputs_outputs():
     @pyfunction(
-        inputs=spec.namespace(volumes=spec.dynamic(any), energies=spec.dynamic(any)),
-        outputs=spec.namespace(volumes=spec.dynamic(any), energies=spec.dynamic(any)),
+        inputs=spec.namespace(volumes=spec.dynamic(Any), energies=spec.dynamic(Any)),
+        outputs=spec.namespace(volumes=spec.dynamic(Any), energies=spec.dynamic(Any)),
     )
     def plot_eos(volumes, energies):
         return {"volumes": volumes, "energies": energies}
@@ -113,8 +115,8 @@ def test_namespace_output():
     """Test function with namespace output and input."""
 
     out = spec.namespace(
-        add_multiply=spec.namespace(add=spec.dynamic(any), multiply=any),
-        minus=any,
+        add_multiply=spec.namespace(add=spec.dynamic(Any), multiply=Any),
+        minus=Any,
     )
 
     @pyfunction(outputs=out)
@@ -150,8 +152,8 @@ def test_override_outputs():
         x=1,
         y=2,
         outputs_spec=spec.namespace(
-            add_multiply=spec.namespace(add=spec.dynamic(any), multiply=any),
-            minus=any,
+            add_multiply=spec.namespace(add=spec.dynamic(Any), multiply=Any),
+            minus=Any,
         ),
     )
 
@@ -241,7 +243,7 @@ def test_nested_inputs_outputs():
 def test_top_level_outputs_dynamic():
     """Test function with dynamic top-level outputs."""
 
-    @pyfunction(outputs=spec.dynamic(any))
+    @pyfunction(outputs=spec.dynamic(Any))
     def test_dynamic(n: int):
         return {f"data_{i}": i for i in range(n)}
 
@@ -258,7 +260,7 @@ def test_top_level_outputs_dynamic():
 def test_dynamic_rows():
     """Test function with dynamic rows."""
 
-    row = spec.namespace(sum=any, product=spec.dynamic())
+    row = spec.namespace(sum=Any, product=spec.dynamic())
 
     @pyfunction(outputs=spec.dynamic(row, sum=int))
     def test_dynamic_rows(data: spec.dynamic(row, sum=int)):
