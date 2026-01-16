@@ -15,6 +15,7 @@ from aiida import load_profile
 from aiida.engine import run_get_node
 
 from aiida_pythonjob import pyfunction, spec
+from typing import Any
 
 load_profile()
 
@@ -32,7 +33,7 @@ print("Default result: ", result)
 # You can specify the ``outputs`` parameter to unpack a returned dictionary into
 # separate output nodes.
 #
-@pyfunction(outputs=spec.namespace(sum=any, diff=any))
+@pyfunction(outputs=spec.namespace(sum=Any, diff=Any))
 def add_and_subtract(x, y):
     return {"sum": x + y, "diff": x - y}
 

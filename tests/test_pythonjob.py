@@ -1,6 +1,7 @@
 import os
 import pathlib
 import tempfile
+from typing import Any
 
 import pytest
 from aiida import orm
@@ -62,7 +63,7 @@ def test_function_custom_outputs(fixture_localhost):
     inputs = prepare_pythonjob_inputs(
         add,
         function_inputs={"x": 1, "y": 2},
-        outputs_spec=spec.namespace(sum=any, diff=any),
+        outputs_spec=spec.namespace(sum=Any, diff=Any),
     )
     result, node = run_get_node(PythonJob, **inputs)
 
@@ -116,8 +117,8 @@ def test_namespace_output(fixture_localhost):
         myfunc,
         function_inputs={"x": 1, "y": 2},
         outputs_spec=spec.namespace(
-            add_multiply=spec.namespace(add=spec.dynamic(any), multiply=any),
-            minus=any,
+            add_multiply=spec.namespace(add=spec.dynamic(Any), multiply=Any),
+            minus=Any,
         ),
     )
     result, node = run_get_node(PythonJob, **inputs)
