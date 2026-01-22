@@ -137,6 +137,7 @@ def _prepare_common(
         _validate_inputs_against_signature(fn, serialized_inputs)
 
     metadata = {
+        "inputs_spec": in_spec.to_dict(),
         "outputs_spec": out_spec.to_dict(),
         "serializers": merged_serializers,
         "deserializers": merged_deserializers,

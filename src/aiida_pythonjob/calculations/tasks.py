@@ -12,8 +12,10 @@ import plumpy.persistence
 import plumpy.process_states
 from aiida.engine.processes.process import Process, ProcessState
 from aiida.engine.utils import InterruptableFuture, interruptable_task
+from node_graph.socket_spec import SocketSpec
+from node_graph.utils.struct_utils import coerce_inputs_from_spec
 
-from aiida_pythonjob.calculations.common import ATTR_DESERIALIZERS
+from aiida_pythonjob.calculations.common import ATTR_DESERIALIZERS, ATTR_INPUTS_SPEC
 from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
 
 logger = logging.getLogger(__name__)
@@ -43,6 +45,9 @@ async def task_run_job(process: Process, *args, **kwargs) -> Any:
     inputs = dict(process.inputs.function_inputs or {})
     deserializers = node.base.attributes.get(ATTR_DESERIALIZERS, {})
     inputs = deserialize_to_raw_python_data(inputs, deserializers=deserializers)
+    inputs_spec = node.base.attributes.get(ATTR_INPUTS_SPEC, {})
+    if inputs_spec:
+        inputs = coerce_inputs_from_spec(inputs, SocketSpec.from_dict(inputs_spec))
 
     try:
         logger.info(f"scheduled request to run the function<{node.pk}>")
@@ -65,6 +70,9 @@ async def task_run_monitor_job(process: Process, *args, **kwargs) -> Any:
     inputs = dict(process.inputs.function_inputs or {})
     deserializers = node.base.attributes.get(ATTR_DESERIALIZERS, {})
     inputs = deserialize_to_raw_python_data(inputs, deserializers=deserializers)
+    inputs_spec = node.base.attributes.get(ATTR_INPUTS_SPEC, {})
+    if inputs_spec:
+        inputs = coerce_inputs_from_spec(inputs, SocketSpec.from_dict(inputs_spec))
 
     try:
         logger.info(f"scheduled request to run the function<{node.pk}>")

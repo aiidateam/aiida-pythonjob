@@ -7,6 +7,25 @@ from node_graph import socket_spec as spec
 
 from aiida_pythonjob import PyFunction, prepare_pyfunction_inputs, pyfunction
 
+try:
+    from pydantic import BaseModel as _BaseModel
+except Exception:  # pragma: no cover - optional dependency
+    _BaseModel = None
+
+if _BaseModel is not None:
+
+    class PydanticInputs(_BaseModel):
+        x: int
+        y: int
+
+    class PydanticOutputs(_BaseModel):
+        sum: int
+        product: int
+
+else:
+    PydanticInputs = None
+    PydanticOutputs = None
+
 
 @pyfunction()
 def add(x, y):
@@ -134,6 +153,20 @@ def test_namespace_output():
     assert result["add_multiply"]["add"]["order1"].value == 3
     assert result["add_multiply"]["add"]["order2"].value == 5
     assert result["add_multiply"]["multiply"].value == 2
+
+
+def test_pydantic_inputs_outputs():
+    pytest.importorskip("pydantic")
+
+    @pyfunction()
+    def add_multiply(data: PydanticInputs) -> PydanticOutputs:
+        return PydanticOutputs(sum=data.x + data.y, product=data.x * data.y)
+
+    result, node = run_get_node(add_multiply, data=PydanticInputs(x=2, y=3))
+
+    assert result["sum"].value == 5
+    assert result["product"].value == 6
+    assert node.is_finished_ok
 
 
 def test_override_outputs():

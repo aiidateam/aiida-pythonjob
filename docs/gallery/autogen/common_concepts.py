@@ -117,6 +117,35 @@ print(node.outputs.sum)
 print(node.outputs.product)
 
 # %%
+# Pydantic models as annotations
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# You can annotate inputs/outputs with Pydantic models. The model defines the socket schema:
+# inputs are validated, and outputs are stored as typed AiiDA nodes per field. Runtime results
+# are therefore a dict of nodes (not a Pydantic instance). Use the node mapping for provenance,
+# and rebuild a model only for convenience.
+#
+# See the node-graph guide for more details on structured models and leaf blobs.
+#
+# .. code-block:: python
+#
+#    from pydantic import BaseModel
+#
+#    class Inputs(BaseModel):
+#        x: int
+#        y: int
+#
+#    class Outputs(BaseModel):
+#        sum: int
+#        product: int
+#
+#    @pyfunction()
+#    def add_multiply(data: Inputs) -> Outputs:
+#        return Outputs(sum=data.x + data.y, product=data.x * data.y)
+#
+#    result, node = run_get_node(add_multiply, data=Inputs(x=2, y=3))
+#    # result is {"sum": Int(...), "product": Int(...)}
+#
+# %%
 # Dynamic namespaces
 # ~~~~~~~~~~~~~~~~~~~~~~
 # When the number and names of outputs are not known until runtime, you can use a dynamic namespace.
@@ -202,7 +231,11 @@ print("nested product:", result["nested"]["product"])
 # 1. The system first searches for an AiiDA data entry point matching the
 #    object's type (e.g., ``ase.atoms.Atoms``).
 # 2. If no specific serializer is found, it attempts to store the data using
-#    ``JsonableData``.
+#    ``JsonableData``. This includes Pydantic models and dataclasses (they are
+#    converted to JSON-friendly dicts).
+# 3. When a Pydantic model is used as an *output schema*, results are stored as
+#    typed AiiDA nodes per field and returned as a dict of nodes (not a model).
+#    Use the node mapping for provenance; rebuild a Pydantic instance only for display.
 # 3. If the data is not JSON-serializable, it will raise an error.
 #
 # Registering a custom serializer

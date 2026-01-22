@@ -11,6 +11,7 @@ from aiida.orm import FolderData, List, RemoteData, SinglefileData, Str, to_aiid
 
 from aiida_pythonjob.calculations.common import (
     ATTR_DESERIALIZERS,
+    ATTR_INPUTS_SPEC,
     FunctionProcessMixin,
     add_common_function_io,
 )
@@ -271,6 +272,9 @@ class PythonJob(FunctionProcessMixin, CalcJob):
 
         # Create a pickle file for the user input values
         filename = "inputs.pickle"
+        inputs_spec = self.node.base.attributes.get(ATTR_INPUTS_SPEC, {})
+        if inputs_spec:
+            input_values = {"__inputs_spec__": inputs_spec, "__inputs__": input_values}
         with folder.open(filename, "wb") as handle:
             pickle.dump(input_values, handle)
 
