@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional, Tuple
 from aiida import orm
 from aiida.engine import ExitCode
 from node_graph.socket_spec import SocketSpec
+from node_graph.utils.struct_utils import is_structured_instance, structured_to_dict
 
 from ..utils import _ensure_spec, serialize_ports
 
@@ -46,6 +47,8 @@ def parse_outputs(
 
     fields = spec.fields or {}
     is_dyn = spec.meta.dynamic
+    if is_structured_instance(results) and (fields or is_dyn):
+        results = structured_to_dict(results)
 
     if already_serialized(results):
         return {"result": results}, None

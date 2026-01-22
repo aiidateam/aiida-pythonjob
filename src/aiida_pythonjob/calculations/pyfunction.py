@@ -14,9 +14,11 @@ from aiida.engine.processes.exit_code import ExitCode
 from aiida.orm import CalcFunctionNode, Float
 from aiida.orm.nodes.data.base import to_aiida_type
 from node_graph.socket_spec import SocketSpec
+from node_graph.utils.struct_utils import coerce_inputs_from_spec
 
 from aiida_pythonjob.calculations.common import (
     ATTR_DESERIALIZERS,
+    ATTR_INPUTS_SPEC,
     ATTR_OUTPUTS_SPEC,
     ATTR_SERIALIZERS,
     FunctionProcessMixin,
@@ -113,6 +115,9 @@ class PyFunction(FunctionProcessMixin, Process):
             inputs = dict(self.inputs.function_inputs or {})
             deserializers = self.node.base.attributes.get(ATTR_DESERIALIZERS, {})
             inputs = deserialize_to_raw_python_data(inputs, deserializers=deserializers)
+            inputs_spec = self.node.base.attributes.get(ATTR_INPUTS_SPEC, {})
+            if inputs_spec:
+                inputs = coerce_inputs_from_spec(inputs, SocketSpec.from_dict(inputs_spec))
         except Exception as exception:
             return self.exit_codes.ERROR_DESERIALIZE_INPUTS_FAILED.format(
                 exception=str(exception), traceback=traceback.format_exc()

@@ -61,6 +61,19 @@ def generate_script_py(
         "        write_error_file('UNPICKLE_INPUTS_FAILED', e, traceback.format_exc())",
         "        sys.exit(1)",
         "",
+        "    # 2b) Optional: rehydrate structured inputs based on inputs_spec",
+        "    try:",
+        "        if isinstance(inputs, dict) and '__inputs_spec__' in inputs:",
+        "            inputs_spec = inputs.get('__inputs_spec__')",
+        "            inputs = inputs.get('__inputs__', {})",
+        "            if inputs_spec:",
+        "                from node_graph.socket_spec import SocketSpec",
+        "                from node_graph.utils.struct_utils import coerce_inputs_from_spec",
+        "                inputs = coerce_inputs_from_spec(inputs, SocketSpec.from_dict(inputs_spec))",
+        "    except Exception as e:",
+        "        write_error_file('COERCE_INPUTS_FAILED', e, traceback.format_exc())",
+        "        sys.exit(1)",
+        "",
     ]
 
     if pickled_function:

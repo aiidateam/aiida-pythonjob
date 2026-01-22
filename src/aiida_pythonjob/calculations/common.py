@@ -9,6 +9,7 @@ from aiida.orm import Data, Str, to_aiida_type
 from aiida_pythonjob.data.deserializer import deserialize_to_raw_python_data
 
 # Attribute keys stored on ProcessNode.base.attributes
+ATTR_INPUTS_SPEC = "inputs_spec"
 ATTR_OUTPUTS_SPEC = "outputs_spec"
 ATTR_SERIALIZERS = "serializers"
 ATTR_DESERIALIZERS = "deserializers"
@@ -21,6 +22,12 @@ def add_common_function_io(spec) -> None:
     :class:`~aiida.engine.CalcJobProcessSpec`.
     """
     spec.input_namespace("function_data", dynamic=True, required=True)
+    spec.input(
+        "metadata.inputs_spec",
+        valid_type=dict,
+        required=False,
+        help="Specification for the inputs.",
+    )
     spec.input(
         "metadata.outputs_spec",
         valid_type=dict,
@@ -107,6 +114,7 @@ class FunctionProcessMixin:
 
     def _setup_metadata(self, metadata: dict) -> None:  # type: ignore[override]
         """Store common metadata on the ProcessNode and forward the rest."""
+        self.node.base.attributes.set(ATTR_INPUTS_SPEC, metadata.pop("inputs_spec", {}))
         self.node.base.attributes.set(ATTR_OUTPUTS_SPEC, metadata.pop("outputs_spec", {}))
         self.node.base.attributes.set(ATTR_SERIALIZERS, metadata.pop("serializers", {}))
         self.node.base.attributes.set(ATTR_DESERIALIZERS, metadata.pop("deserializers", {}))

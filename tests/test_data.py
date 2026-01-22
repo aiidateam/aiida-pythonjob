@@ -1,7 +1,30 @@
+from dataclasses import dataclass
+
 import aiida
 import pytest
 
+from aiida_pythonjob.data.jsonable_data import JsonableData
 from aiida_pythonjob.data.serializer import all_serializers
+
+try:
+    from pydantic import BaseModel as _BaseModel
+except Exception:  # pragma: no cover - optional dependency
+    _BaseModel = None
+
+if _BaseModel is not None:
+
+    class BlobModel(_BaseModel):
+        a: int
+        b: int
+
+else:
+    BlobModel = None
+
+
+@dataclass
+class BlobDC:
+    a: int
+    b: int
 
 
 def test_typing():
@@ -90,3 +113,15 @@ def test_datetime_data():
 
     with pytest.raises(TypeError, match="Expected datetime.datetime"):
         DateTimeData("2024-06-01")
+
+
+def test_jsonable_data_pydantic_and_dataclass():
+    pytest.importorskip("pydantic")
+
+    model = BlobModel(a=1, b=2)
+    node = JsonableData(model)
+    assert node.value.model_dump() == model.model_dump()
+
+    dc = BlobDC(a=3, b=4)
+    node_dc = JsonableData(dc)
+    assert node_dc.value == dc

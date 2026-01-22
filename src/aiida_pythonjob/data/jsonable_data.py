@@ -1,9 +1,15 @@
 import importlib
 import json
 import typing
+from dataclasses import asdict, is_dataclass
 
 import numpy as np
 from aiida import orm
+
+try:
+    from pydantic import BaseModel
+except Exception:
+    BaseModel = ()
 
 __all__ = ("JsonableData",)
 
@@ -46,6 +52,8 @@ class JsonableData(orm.Data):
         self._obj = obj
 
     def _validate_method(self, obj: typing.Any):
+        if self._is_pydantic_instance(obj) or self._is_dataclass_instance(obj):
+            return
         if not any(hasattr(obj, method) for method in self._DICT_METHODS):
             raise ValueError(f"The object must have at least one of the following methods: {self._DICT_METHODS}")
         if not any(hasattr(obj, method) for method in self._FROM_DICT_METHODS):
@@ -55,6 +63,10 @@ class JsonableData(orm.Data):
         """
         Attempt to call one of the recognized "to-dict" style methods on `obj` in sequence.
         """
+        if self._is_pydantic_instance(obj):
+            return obj.model_dump(exclude_none=False)
+        if self._is_dataclass_instance(obj):
+            return asdict(obj)
         for method_name in self._DICT_METHODS:
             method = getattr(obj, method_name, None)
             if callable(method):
@@ -138,6 +150,14 @@ class JsonableData(orm.Data):
         """
         Attempt to reconstruct an object of type `cls_` from `attributes`.
         """
+        if self._is_pydantic_type(cls_):
+            if hasattr(cls_, "model_validate"):
+                return cls_.model_validate(attributes)
+            if hasattr(cls_, "parse_obj"):
+                return cls_.parse_obj(attributes)
+            return cls_(**attributes)
+        if self._is_dataclass_type(cls_):
+            return cls_(**attributes)
         for method_name in self._FROM_DICT_METHODS:
             fromdict_method = getattr(cls_, method_name, None)
             if callable(fromdict_method):
@@ -150,6 +170,22 @@ class JsonableData(orm.Data):
                 f"Cannot rebuild object of type `{cls_}`: no suitable from-dict method "
                 f"({self._FROM_DICT_METHODS}) nor constructor that accepts these attributes."
             )
+
+    @staticmethod
+    def _is_pydantic_instance(obj: typing.Any) -> bool:
+        return isinstance(obj, BaseModel)
+
+    @staticmethod
+    def _is_pydantic_type(cls_: typing.Any) -> bool:
+        return isinstance(cls_, type) and issubclass(cls_, BaseModel)
+
+    @staticmethod
+    def _is_dataclass_instance(obj: typing.Any) -> bool:
+        return is_dataclass(obj) and not isinstance(obj, type)
+
+    @staticmethod
+    def _is_dataclass_type(cls_: typing.Any) -> bool:
+        return is_dataclass(cls_)
 
     @property
     def obj(self) -> typing.Any:

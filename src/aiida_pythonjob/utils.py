@@ -18,6 +18,7 @@ from aiida.common.exceptions import NotExistent
 from aiida.orm import Computer, InstalledCode, Str, User, load_code, load_computer
 from node_graph.socket_meta import SocketMeta
 from node_graph.socket_spec import SocketSpec
+from node_graph.utils.struct_utils import is_structured_instance, structured_to_dict
 
 from aiida_pythonjob.data.serializer import general_serializer
 
@@ -295,6 +296,8 @@ def serialize_ports(
     # Namespace
     if spec.is_namespace():
         name = getattr(spec.meta, "help", None) or "<namespace>"
+        if is_structured_instance(python_data):
+            python_data = structured_to_dict(python_data)
         if not isinstance(python_data, dict):
             raise ValueError(f"Expected dict for namespace '{name}', got {type(python_data)}")
 

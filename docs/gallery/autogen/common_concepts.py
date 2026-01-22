@@ -202,7 +202,8 @@ print("nested product:", result["nested"]["product"])
 # 1. The system first searches for an AiiDA data entry point matching the
 #    object's type (e.g., ``ase.atoms.Atoms``).
 # 2. If no specific serializer is found, it attempts to store the data using
-#    ``JsonableData``.
+#    ``JsonableData``. This includes Pydantic models and dataclasses (they are
+#    converted to JSON-friendly dicts).
 # 3. If the data is not JSON-serializable, it will raise an error.
 #
 # Registering a custom serializer
