@@ -46,3 +46,51 @@ class DateTimeData(Data):
 
     def __str__(self):
         return str(self.value)
+
+
+class FunctionData(Data):
+    """AiiDA node to store a Python function path."""
+
+    def __init__(self, value, **kwargs):
+        module = getattr(value, "__module__", None)
+        qualname = getattr(value, "__qualname__", None) or getattr(value, "__name__", None)
+        if not module or not qualname:
+            raise TypeError(f"Expected a function-like object, got {type(value)}")
+        super().__init__(**kwargs)
+        self.base.attributes.set("module_path", module)
+        self.base.attributes.set("qualname", qualname)
+
+    @property
+    def module_path(self) -> str:
+        return self.base.attributes.get("module_path")
+
+    @property
+    def qualname(self) -> str:
+        return self.base.attributes.get("qualname")
+
+    @property
+    def path(self) -> str:
+        return f"{self.module_path}:{self.qualname}"
+
+    @property
+    def value(self):
+        from importlib import import_module
+
+        try:
+            module = import_module(self.module_path)
+        except Exception as exc:
+            raise ImportError(
+                f"Failed to import function module '{self.module_path}' for FunctionData '{self.path}': {exc}"
+            ) from exc
+
+        obj = module
+        try:
+            for part in self.qualname.split("."):
+                obj = getattr(obj, part)
+        except AttributeError as exc:
+            raise ImportError(f"Failed to resolve function '{self.path}': attribute '{part}' not found.") from exc
+
+        return obj
+
+    def __str__(self) -> str:
+        return self.path
