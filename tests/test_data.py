@@ -115,6 +115,18 @@ def test_datetime_data():
         DateTimeData("2024-06-01")
 
 
+def _sample_function():
+    return "ok"
+
+
+def test_function_data():
+    from aiida_pythonjob.data.common_data import FunctionData
+
+    func_data = FunctionData(_sample_function)
+    assert func_data.path.endswith(":_sample_function")
+    assert func_data.value is _sample_function
+
+
 def test_jsonable_data_pydantic_and_dataclass():
     pytest.importorskip("pydantic")
 
