@@ -112,7 +112,7 @@ def general_serializer(
     serializers = serializers or all_serializers
 
     # 1) If it is already an AiiDA node, just return it
-    if isinstance(data, orm.Data):
+    if isinstance(data, orm.Node):
         return data
     elif isinstance(data, common.extendeddicts.AttributeDict):
         # if the data is an AttributeDict, use it directly
