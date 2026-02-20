@@ -124,7 +124,7 @@ def general_serializer(
     if ep_key in serializers:
         try:
             serializer = import_from_path(serializers[ep_key])
-            new_node = serializer(data, user=user)
+            new_node = serializer(data)
             if store:
                 new_node.store()
             return new_node
