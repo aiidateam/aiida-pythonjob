@@ -21,7 +21,8 @@ builtin_serializers = {
     "numpy.float32": "aiida.orm.nodes.data.float.Float",
     "numpy.float64": "aiida.orm.nodes.data.float.Float",
     "numpy.int64": "aiida.orm.nodes.data.int.Int",
-    "numpy.bool_": "aiida.orm.nodes.data.bool.Bool",
+    "numpy.bool_": "aiida.orm.nodes.data.bool.Bool",  # numpy<2.0
+    "numpy.bool": "aiida.orm.nodes.data.bool.Bool",  # numpy>=2.0
     "numpy.ndarray": "aiida.orm.nodes.data.array.array.ArrayData",
 }
 
