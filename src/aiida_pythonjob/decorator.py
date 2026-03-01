@@ -20,7 +20,7 @@ from aiida_pythonjob.launch import create_inputs, prepare_pyfunction_inputs
 LOGGER = logging.getLogger(__name__)
 
 _AIIDA_VERSION = parse_version(aiida.__version__)
-_NEEDS_RECURSION_LIMIT_WORKAROUND = _AIIDA_VERSION < parse_version("2.8.0")
+_NEEDS_RECURSION_LIMIT_WORKAROUND = _AIIDA_VERSION < parse_version("2.8.0rc0")
 
 if _NEEDS_RECURSION_LIMIT_WORKAROUND:
     from aiida.engine.processes.functions import get_stack_size
