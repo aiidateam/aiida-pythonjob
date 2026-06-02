@@ -69,7 +69,7 @@ def generate_script_py(
         "            try:",
         "                from node_graph.socket_spec import SocketSpec",
         "                from node_graph.utils.struct_utils import coerce_inputs_from_spec",
-        "            except ModuleNotFoundError as e:",
+        "            except ImportError as e:",
         "                tip = (",
         "                    'node_graph is required on the remote Python environment when inputs_spec is used.\\n'",
         "                    'Consider using the `create_conda_env` utility to create a conda environment with the node_graph dependency.'",  # noqa: E501
