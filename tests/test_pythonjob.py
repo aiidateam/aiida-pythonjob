@@ -18,11 +18,13 @@ def test_validate_inputs(fixture_localhost):
     with pytest.raises(ValueError, match="Either `function` or `function_data` must be provided."):
         prepare_pythonjob_inputs(
             function_inputs={"x": 1, "y": 2},
+            computer=fixture_localhost,
         )
     with pytest.raises(ValueError, match="Only one of `function` or `function_data` should be provided."):
         prepare_pythonjob_inputs(
             function=add,
             function_data={"module_path": "math", "name": "sqrt", "is_pickle": False},
+            computer=fixture_localhost,
         )
 
 
@@ -34,6 +36,7 @@ def test_validate_function_inputs(fixture_localhost):
         prepare_pythonjob_inputs(
             function=add,
             function_inputs={"x": 1},
+            computer=fixture_localhost,
         )
 
 
@@ -47,6 +50,7 @@ def test_function_default_outputs(fixture_localhost):
         add,
         function_inputs={"x": 1, "y": 2},
         process_label="add",
+        computer=fixture_localhost,
     )
     result, node = run_get_node(PythonJob, **inputs)
 
@@ -64,6 +68,7 @@ def test_function_custom_outputs(fixture_localhost):
         add,
         function_inputs={"x": 1, "y": 2},
         outputs_spec=spec.namespace(sum=Any, diff=Any),
+        computer=fixture_localhost,
     )
     result, node = run_get_node(PythonJob, **inputs)
 
@@ -80,6 +85,7 @@ def test_importable_function(fixture_localhost):
     inputs = prepare_pythonjob_inputs(
         add,
         function_inputs={"x": 1, "y": 2},
+        computer=fixture_localhost,
     )
     result, node = run_get_node(PythonJob, **inputs)
     print("result: ", result)
@@ -98,6 +104,7 @@ def test_kwargs_inputs(fixture_localhost):
     inputs = prepare_pythonjob_inputs(
         add,
         function_inputs={"x": 1, "y": 2, "a": 3, "b": 4},
+        computer=fixture_localhost,
     )
     result, node = run_get_node(PythonJob, **inputs)
     assert result["result"].value == 10
@@ -120,6 +127,7 @@ def test_namespace_output(fixture_localhost):
             add_multiply=spec.namespace(add=spec.dynamic(Any), multiply=Any),
             minus=Any,
         ),
+        computer=fixture_localhost,
     )
     result, node = run_get_node(PythonJob, **inputs)
     print("result: ", result)
@@ -146,6 +154,7 @@ def test_parent_folder_remote(fixture_localhost):
     inputs1 = prepare_pythonjob_inputs(
         add,
         function_inputs={"x": 1, "y": 2},
+        computer=fixture_localhost,
     )
     result1, node1 = run_get_node(PythonJob, inputs=inputs1)
 
@@ -153,6 +162,7 @@ def test_parent_folder_remote(fixture_localhost):
         multiply,
         function_inputs={"x": 1, "y": 2},
         parent_folder=result1["remote_folder"],
+        computer=fixture_localhost,
     )
     result2, node2 = run_get_node(PythonJob, inputs=inputs2)
     print("result2: ", result2)
@@ -179,6 +189,7 @@ def test_parent_folder_local(fixture_localhost):
             multiply,
             function_inputs={"x": 1, "y": 2},
             parent_folder=parent_folder,
+            computer=fixture_localhost,
         )
         result2, node2 = run_get_node(PythonJob, inputs=inputs2)
 
@@ -220,6 +231,7 @@ def test_upload_files(fixture_localhost):
                 "another_input.txt": single_file_data,
                 "inputs_folder": input_folder,
             },
+            computer=fixture_localhost,
         )
         result, node = run_get_node(PythonJob, inputs=inputs)
         assert result["result"].value == 9
@@ -242,6 +254,7 @@ def test_retrieve_files(fixture_localhost):
                 "additional_retrieve_list": ["result.txt"],
             }
         },
+        computer=fixture_localhost,
     )
     result, node = run_get_node(PythonJob, inputs=inputs)
     # ------------------------- Submit the calculation -------------------
@@ -262,12 +275,13 @@ def test_copy_files(fixture_localhost):
             x = int(f.read())
         return x * y
 
-    inputs = prepare_pythonjob_inputs(add, function_inputs={"x": 1, "y": 2})
+    inputs = prepare_pythonjob_inputs(add, function_inputs={"x": 1, "y": 2}, computer=fixture_localhost)
     result, node = run_get_node(PythonJob, inputs=inputs)
     inputs = prepare_pythonjob_inputs(
         multiply,
         function_inputs={"x_folder_name": "x_folder_name", "y": 2},
         copy_files={"x_folder_name": result["remote_folder"]},
+        computer=fixture_localhost,
     )
     result, node = run_get_node(PythonJob, inputs=inputs)
     assert result["result"].value == 6
@@ -287,6 +301,7 @@ def test_exit_code(fixture_localhost):
     inputs = prepare_pythonjob_inputs(
         add,
         function_inputs={"x": array([1, 1]), "y": array([1, -2])},
+        computer=fixture_localhost,
     )
     result, node = run_get_node(PythonJob, inputs=inputs)
     assert node.exit_status == 410
@@ -303,6 +318,7 @@ def test_local_function(fixture_localhost):
     inputs = prepare_pythonjob_inputs(
         add,
         function_inputs={"x": 2, "y": 3},
+        computer=fixture_localhost,
     )
     result, node = run_get_node(PythonJob, **inputs)
     assert result["result"].value == 8
@@ -320,6 +336,7 @@ def test_submit(fixture_localhost):
         add,
         function_inputs={"x": 1, "y": 2},
         process_label="add",
+        computer=fixture_localhost,
     )
     node = submit(PythonJob, **inputs, wait=True)
 
