@@ -15,7 +15,7 @@ from typing import (
 )
 
 from aiida.common.exceptions import NotExistent
-from aiida.orm import Computer, InstalledCode, Str, User, load_code, load_computer
+from aiida.orm import Computer, InstalledCode, User, load_code, load_computer
 from node_graph.socket_meta import SocketMeta
 from node_graph.socket_spec import SocketSpec
 from node_graph.utils.struct_utils import is_structured_instance, structured_to_dict
@@ -110,12 +110,13 @@ def get_or_create_code(
 ) -> InstalledCode:
     """Try to load code, create if not exit."""
 
+    computer_label = computer.label if isinstance(computer, Computer) else computer
+
     try:
-        return load_code(f"{label}@{computer}")
+        return load_code(f"{label}@{computer_label}")
     except NotExistent:
-        description = f"Code on computer: {computer}"
-        computer = computer.value if isinstance(computer, Str) else computer
-        computer = load_computer(computer)
+        description = f"Code on computer: {computer_label}"
+        computer = load_computer(computer_label)
         filepath_executable = filepath_executable or label
         code = InstalledCode(
             computer=computer,
