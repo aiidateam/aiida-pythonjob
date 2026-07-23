@@ -12,6 +12,7 @@ builtin_deserializers = {
     "aiida.orm.nodes.data.dict.Dict": "aiida_pythonjob.data.deserializer.dict_data_to_dict",
     "aiida.orm.nodes.data.array.array.ArrayData": "aiida_pythonjob.data.deserializer.array_data_to_array",
     "aiida.orm.nodes.data.structure.StructureData": "aiida_pythonjob.data.deserializer.structure_data_to_atoms",
+    "aiida.orm.nodes.data.array.trajectory.TrajectoryData": "aiida_pythonjob.data.deserializer.trajectory_data_to_atoms",
 }
 
 
@@ -37,6 +38,10 @@ def array_data_to_array(data):
 
 def structure_data_to_atoms(structure):
     return structure.get_ase()
+
+
+def trajectory_data_to_atoms(trajectory):
+    return [trajectory.get_step_structure(i).get_ase() for i in trajectory.get_stepids()]
 
 
 def structure_data_to_pymatgen(structure):
